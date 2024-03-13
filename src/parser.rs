@@ -14,7 +14,7 @@ pub struct LookupTables {
     species_meta_vec: Vec<SpeciesMeta>,
     level_name_maps: Vec<Vec<String>>,
     level_hierarchy_maps: Vec<Vec<Vec<usize>>>,
-    k_mer_map: HashMap<u16, Vec<usize>>,
+    k_mer_map: Vec<Vec<usize>>,
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -41,9 +41,9 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
     // Level 3: Family
     // Level 4: Genus
     let mut level_sets: [HashSet<String>; 5] = Default::default();
-    let mut k_mer_map: HashMap<u16, Vec<usize>> = HashMap::new();
+    const ARRAY_REPEAT_VALUE: std::vec::Vec<usize> = Vec::new();
+    let mut k_mer_map: Vec<Vec<usize>> = vec![ARRAY_REPEAT_VALUE; 2 << 15];
     let labels = {
-        // TODO:  do name preprocessing here to save on additional iteration and rsplitn
         let _tmr = timer!(Level::Info; "Read file and create k-mer mapping");
         let lines: Vec<String> = fasta_str
             .lines()
@@ -79,12 +79,12 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
                         .iter()
                         .enumerate()
                         .for_each(|(j, c)| k_mer |= (*c as u16) << (14 - j * 2));
-                    k_mer_map.entry(k_mer).or_default().push(idx);
+                    k_mer_map[k_mer as usize].push(idx);
                     // println!("{k_mer:#b}");
                     current_sequence[8..].iter().for_each(|c| {
                         k_mer = (k_mer << 2) | *c as u16;
                         // println!("{k_mer:#b}");
-                        k_mer_map.entry(k_mer).or_default().push(idx);
+                        k_mer_map[k_mer as usize].push(idx);
                     });
                     current_sequence = Vec::new();
                     idx += 1;
@@ -110,12 +110,12 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
             .iter()
             .enumerate()
             .for_each(|(j, c)| k_mer |= (*c as u16) << (14 - j * 2));
-        k_mer_map.entry(k_mer).or_default().push(idx);
+        k_mer_map[k_mer as usize].push(idx);
         // println!("{k_mer:#b}");
         current_sequence[8..].iter().for_each(|c| {
             k_mer = (k_mer << 2) | *c as u16;
             // println!("{k_mer:#b}");
-            k_mer_map.entry(k_mer).or_default().push(idx);
+            k_mer_map[k_mer as usize].push(idx);
         });
         labels
     };
@@ -212,13 +212,15 @@ ATACGCTTTGCGT";
             k_mer_map,
             ..
         } = parse_reference_fasta_str(fasta_str).unwrap();
-        // for (k, v) in k_mer_map.iter() {
-        //     println!("{k:b}:\n {v:?}");
-        // }
-        assert_eq!(k_mer_map[&0b10101111110], &[0]);
-        assert_eq!(k_mer_map[&0b11000110011111], &[1, 3, 4]);
-        assert_eq!(k_mer_map[&0b1001111110011011], &[3, 4]);
-        assert_eq!(k_mer_map[&0b11010110011100], &[2]);
+        for (k, v) in k_mer_map.iter().enumerate() {
+            if !v.is_empty() {
+                println!("{k:b}:\n {v:?}");
+            }
+        }
+        assert_eq!(k_mer_map[0b1010111111110_usize], &[0]);
+        assert_eq!(k_mer_map[0b11000110011111_usize], &[1, 3, 4]);
+        assert_eq!(k_mer_map[0b1001111111100110_usize], &[3, 4]);
+        assert_eq!(k_mer_map[0b110011100111010_usize], &[2]);
         assert_eq!(
             species_meta_vec,
             &[
