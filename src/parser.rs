@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use itertools::Itertools;
-use log::{Level, debug};
+use log::{debug, Level};
 use logging_timer::{time, timer};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -41,9 +41,10 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
     // Level 3: Family
     // Level 4: Genus
     let mut level_sets: [HashSet<String>; 5] = Default::default();
-    let (labels, sequences) = {
+    let mut k_mer_map: HashMap<u16, Vec<usize>> = HashMap::new();
+    let labels = {
         // TODO:  do name preprocessing here to save on additional iteration and rsplitn
-        let _tmr = timer!(Level::Info; "Read file");
+        let _tmr = timer!(Level::Info; "Read file and create k-mer mapping");
         let lines: Vec<String> = fasta_str
             .lines()
             .map(|l| l.trim().to_string())
@@ -52,9 +53,9 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
         if !lines[0].starts_with(['>', ';']) {
             bail!("Not a valid FASTA file")
         }
-        let mut labels: Vec<String> = Vec::new();
-        let mut sequences: Vec<String> = Vec::new();
-        let mut current_sequence = String::new();
+        let mut labels: Vec<Vec<String>> = Vec::new();
+        let mut current_sequence = Vec::<u8>::new();
+        let mut idx: usize = 0;
 
         // create label and sequence vectors
         for line in lines {
@@ -62,28 +63,64 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
                 continue;
             }
             if let Some(label) = line.strip_prefix('>') {
-                labels.push(label.to_string());
+                let taxon_info = label.rsplitn(7, '|').map(|s| s.to_string()).collect_vec();
+                taxon_info[1..6]
+                    .iter()
+                    .zip_eq((0..level_sets.len()).rev())
+                    .for_each(|(name, idx)| {
+                        level_sets[idx].insert(name.to_string());
+                    });
+                labels.push(taxon_info);
                 if labels.len() > 1 {
-                    sequences.push(current_sequence);
-                    current_sequence = String::new();
+
+                    let mut k_mer: u16 = 0;
+                    // dbg!(&current_sequence);
+                    current_sequence[0..8]
+                        .iter()
+                        .enumerate()
+                        .for_each(|(j, c)| k_mer |= (*c as u16) << (14 - j * 2));
+                    k_mer_map.entry(k_mer).or_default().push(idx);
+                    // println!("{k_mer:#b}");
+                    current_sequence[8..].iter().for_each(|c| {
+                        k_mer = (k_mer << 2) | *c as u16;
+                        // println!("{k_mer:#b}");
+                        k_mer_map.entry(k_mer).or_default().push(idx);
+                    });
+                    current_sequence = Vec::new();
+                    idx += 1;
                 }
             } else {
-                current_sequence.extend(line.chars().filter(|c| c.is_alphabetic()));
+                current_sequence.extend(line
+                .chars()
+                .map(|c| -> u8 {
+                    match c {
+                        'A' => 0b00,
+                        'C' => 0b01,
+                        'G' => 0b10,
+                        'T' => 0b11,
+                        _ => panic!("Unexpected character: {}", c),
+                    }
+                }))
+
             }
         }
-        sequences.push(current_sequence);
-        (labels, sequences)
+        let mut k_mer: u16 = 0;
+        // dbg!(&current_sequence);
+        current_sequence[0..8]
+            .iter()
+            .enumerate()
+            .for_each(|(j, c)| k_mer |= (*c as u16) << (14 - j * 2));
+        k_mer_map.entry(k_mer).or_default().push(idx);
+        // println!("{k_mer:#b}");
+        current_sequence[8..].iter().for_each(|c| {
+            k_mer = (k_mer << 2) | *c as u16;
+            // println!("{k_mer:#b}");
+            k_mer_map.entry(k_mer).or_default().push(idx);
+        });
+        labels
     };
 
     // create mapping to index for each taxonomical level
-    labels.iter().for_each(|label| {
-        label.rsplitn(7, '|').collect_vec()[1..6]
-            .iter()
-            .zip_eq((0..level_sets.len()).rev())
-            .for_each(|(name, idx)| {
-                level_sets[idx].insert(name.to_string());
-            });
-    });
     let level_name_maps = level_sets
         .into_iter()
         .map(|set| set.into_iter().sorted().collect_vec())
@@ -108,7 +145,6 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
 
     // dbg!(&level_rev_maps);
     // create data structure for mapping k-mers to sequences as well as between taxonomical levels
-    let mut k_mer_map: HashMap<u16, Vec<usize>> = HashMap::new();
     let mut species_meta_vec: Vec<SpeciesMeta> = Vec::new();
     let mut level_hierarchy_maps: Vec<Vec<HashSet<usize>>> = Vec::new();
     for level in &level_name_maps {
@@ -116,18 +152,17 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
     }
     labels
         .into_iter()
-        .zip_eq(sequences)
         .enumerate()
-        .for_each(|(i, (label, sequence))| {
-            let taxon_info = label.rsplitn(7, '|').collect_vec();
+        .for_each(|(i, taxon_info)| {
+            // let taxon_info = label.rsplitn(7, '|').collect_vec();
             let species_meta = SpeciesMeta {
-                name: label.clone(),
+                name: taxon_info.iter().rev().join("|"),
                 indices: [
-                    level_rev_maps[0][&taxon_info[5]],
-                    level_rev_maps[1][&taxon_info[4]],
-                    level_rev_maps[2][&taxon_info[3]],
-                    level_rev_maps[3][&taxon_info[2]],
-                    level_rev_maps[4][&taxon_info[1]],
+                    level_rev_maps[0][taxon_info[5].as_str()],
+                    level_rev_maps[1][taxon_info[4].as_str()],
+                    level_rev_maps[2][taxon_info[3].as_str()],
+                    level_rev_maps[3][taxon_info[2].as_str()],
+                    level_rev_maps[4][taxon_info[1].as_str()],
                 ],
             };
             level_hierarchy_maps[0][species_meta.indices[0]].insert(species_meta.indices[1]);
@@ -136,31 +171,6 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
             level_hierarchy_maps[3][species_meta.indices[3]].insert(species_meta.indices[4]);
             level_hierarchy_maps[4][species_meta.indices[4]].insert(i);
             species_meta_vec.push(species_meta);
-            let sequence_bitvecs = sequence
-                .chars()
-                .map(|c| -> u16 {
-                    match c {
-                        'A' => 0b00,
-                        'C' => 0b01,
-                        'G' => 0b10,
-                        'T' => 0b11,
-                        _ => panic!("Unexpected character: {}", c),
-                    }
-                })
-                .collect_vec();
-            // dbg!(&sequence_bitvecs);
-            let mut k_mer: u16 = 0;
-            sequence_bitvecs[0..8]
-                .iter()
-                .enumerate()
-                .for_each(|(j, c)| k_mer |= c << (14 - j * 2));
-            k_mer_map.entry(k_mer).or_default().push(i);
-            // println!("{k_mer:#b}");
-            sequence_bitvecs[9..].iter().for_each(|c| {
-                k_mer = (k_mer << 2) | c;
-                // println!("{k_mer:#b}");
-                k_mer_map.entry(k_mer).or_default().push(i);
-            })
         });
     // dbg!(level_hierarchy_maps);
     Ok(LookupTables {
@@ -213,23 +223,28 @@ ATACGCTTTGCGT";
             species_meta_vec,
             &[
                 SpeciesMeta {
-                    name: "Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species1".to_string(),
+                    name: "Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species1"
+                        .to_string(),
                     indices: [0, 0, 0, 0, 0]
                 },
                 SpeciesMeta {
-                    name: "Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species2".to_string(),
+                    name: "Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species2"
+                        .to_string(),
                     indices: [0, 0, 0, 0, 0]
                 },
                 SpeciesMeta {
-                    name: "Badabing|Badabum|Phylum1|Class1|Order1|Family2|Genus2|Species3".to_string(),
+                    name: "Badabing|Badabum|Phylum1|Class1|Order1|Family2|Genus2|Species3"
+                        .to_string(),
                     indices: [0, 0, 0, 1, 1]
                 },
                 SpeciesMeta {
-                    name: "Badabing|Badabum|Phylum1|Class2|Order2|Family3|Genus3|Species4".to_string(),
+                    name: "Badabing|Badabum|Phylum1|Class2|Order2|Family3|Genus3|Species4"
+                        .to_string(),
                     indices: [0, 1, 1, 2, 2]
                 },
                 SpeciesMeta {
-                    name: "Badabing|Badabum|Phylum2|Class3|Order3|Family4|Genus4|Species5".to_string(),
+                    name: "Badabing|Badabum|Phylum2|Class3|Order3|Family4|Genus4|Species5"
+                        .to_string(),
                     indices: [1, 2, 2, 3, 3]
                 }
             ]
