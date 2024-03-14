@@ -21,6 +21,15 @@ pub struct Args {
     /// Number of rounds per query
     #[arg(short, long, default_value_t = 100)]
     pub num_rounds: usize,
+    /// Number of 8-mers
+    #[arg(short = 'k', long, default_value_t = 32)]
+    pub num_k_mers: usize,
+    /// 8-mer hit-threshold
+    #[arg(short = 't', long, default_value_t = 1.0 / 3.0)]
+    pub threshold: f64,
+    /// Number of output species per query
+    #[arg(short = 'r', long, default_value_t = 5)]
+    pub num_results: usize,
     /// Seed
     #[arg(short, long, default_value_t = 42)]
     pub seed: u64,
