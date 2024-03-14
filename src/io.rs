@@ -1,7 +1,7 @@
+use anyhow::Result;
 use clap::Parser;
 use clap_verbosity_flag::Verbosity;
 use std::{io::Write, path::PathBuf};
-use anyhow::Result;
 
 #[derive(Parser)]
 #[command(author, version, about)]
@@ -43,8 +43,9 @@ pub struct Args {
 impl Args {
     pub fn get_output(&self) -> Result<Box<dyn Write>> {
         match self.output {
-            Some(ref path) => Ok(std::fs::File::create(path)
-                .map(|f| Box::new(f) as Box<dyn Write>)?),
+            Some(ref path) => {
+                Ok(std::fs::File::create(path).map(|f| Box::new(f) as Box<dyn Write>)?)
+            }
             None => Ok(Box::new(std::io::stdout())),
         }
     }

@@ -17,7 +17,12 @@ pub fn sequence_to_kmers(sequence: &[u8]) -> Vec<u16> {
     k_mers
 }
 
-pub fn accumulate_results(lookup_tables: &LookupTables, hit_buffer: &[f64], cutoff: usize, query_label: &str) -> Vec<String> {
+pub fn accumulate_results(
+    lookup_tables: &LookupTables,
+    hit_buffer: &[f64],
+    cutoff: usize,
+    query_label: &str,
+) -> Vec<String> {
     let mut result_lines: Vec<String> = Vec::new();
     let mut phylum_values = vec![0.0; lookup_tables.level_hierarchy_maps[0].len()];
     let mut class_values = vec![0.0; lookup_tables.level_hierarchy_maps[1].len()];
@@ -43,29 +48,74 @@ pub fn accumulate_results(lookup_tables: &LookupTables, hit_buffer: &[f64], cuto
     }
 
     let mut out_count = 0_usize;
-    for (a, _) in phylum_values.iter().enumerate().sorted_by(|a, b| b.1.partial_cmp(a.1).unwrap()) {
-        if phylum_values[a] == 0.0 { break; }
-        for (_, b) in lookup_tables.level_hierarchy_maps[0][a].iter().enumerate().sorted_by(|a, b| class_values[*b.1].partial_cmp(&class_values[*a.1]).unwrap()) {
-            if class_values[*b] == 0.0 { break; }
-            for (_, c) in lookup_tables.level_hierarchy_maps[1][*b].iter().enumerate().sorted_by(|a, b| order_values[*b.1].partial_cmp(&order_values[*a.1]).unwrap()) {
-                if order_values[*c] == 0.0 { break; }
-                for (_, d) in lookup_tables.level_hierarchy_maps[2][*c].iter().enumerate().sorted_by(|a, b| family_values[*b.1].partial_cmp(&family_values[*a.1]).unwrap()) {
-                    if family_values[*d] == 0.0 { break; }
-                    for (_, e) in lookup_tables.level_hierarchy_maps[3][*d].iter().enumerate().sorted_by(|a, b| genus_values[*b.1].partial_cmp(&genus_values[*a.1]).unwrap()) {
-                        if genus_values[*e] == 0.0 { break; }
-                        for species in lookup_tables.level_hierarchy_maps[4][*e].iter().sorted_by(|a, b| hit_buffer[**b].partial_cmp(&hit_buffer[**a]).unwrap()) {
-                            if hit_buffer[*species] == 0.0 { break; }
+    for (a, _) in phylum_values
+        .iter()
+        .enumerate()
+        .sorted_by(|a, b| b.1.partial_cmp(a.1).unwrap())
+    {
+        if phylum_values[a] == 0.0 {
+            break;
+        }
+        for (_, b) in lookup_tables.level_hierarchy_maps[0][a]
+            .iter()
+            .enumerate()
+            .sorted_by(|a, b| class_values[*b.1].partial_cmp(&class_values[*a.1]).unwrap())
+        {
+            if class_values[*b] == 0.0 {
+                break;
+            }
+            for (_, c) in lookup_tables.level_hierarchy_maps[1][*b]
+                .iter()
+                .enumerate()
+                .sorted_by(|a, b| order_values[*b.1].partial_cmp(&order_values[*a.1]).unwrap())
+            {
+                if order_values[*c] == 0.0 {
+                    break;
+                }
+                for (_, d) in lookup_tables.level_hierarchy_maps[2][*c]
+                    .iter()
+                    .enumerate()
+                    .sorted_by(|a, b| {
+                        family_values[*b.1]
+                            .partial_cmp(&family_values[*a.1])
+                            .unwrap()
+                    })
+                {
+                    if family_values[*d] == 0.0 {
+                        break;
+                    }
+                    for (_, e) in lookup_tables.level_hierarchy_maps[3][*d]
+                        .iter()
+                        .enumerate()
+                        .sorted_by(|a, b| {
+                            genus_values[*b.1].partial_cmp(&genus_values[*a.1]).unwrap()
+                        })
+                    {
+                        if genus_values[*e] == 0.0 {
+                            break;
+                        }
+                        for species in
+                            lookup_tables.level_hierarchy_maps[4][*e]
+                                .iter()
+                                .sorted_by(|a, b| {
+                                    hit_buffer[**b].partial_cmp(&hit_buffer[**a]).unwrap()
+                                })
+                        {
+                            if hit_buffer[*species] == 0.0 {
+                                break;
+                            }
                             let label = &lookup_tables.labels[*species];
-                            result_lines.push(format!("{} {} {:.4}|{:.4}|{:.4}|{:.4}|{:.4}|{:.4}",
-                                    query_label,
-                                    label,
-                                    phylum_values[a],
-                                    class_values[*b],
-                                    order_values[*c],
-                                    family_values[*d],
-                                    genus_values[*e],
-                                    hit_buffer[*species],
-                                    ));
+                            result_lines.push(format!(
+                                "{} {} {:.4}|{:.4}|{:.4}|{:.4}|{:.4}|{:.4}",
+                                query_label,
+                                label,
+                                phylum_values[a],
+                                class_values[*b],
+                                order_values[*c],
+                                family_values[*d],
+                                genus_values[*e],
+                                hit_buffer[*species],
+                            ));
                             out_count += 1;
                             if out_count == cutoff {
                                 return result_lines;
@@ -87,7 +137,6 @@ mod tests {
 
     #[test]
     fn test_accumulation() {
-
         let fasta_str = r">Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species1
 AAACCCTTTGGGA
 >Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species2
