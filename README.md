@@ -14,8 +14,9 @@ Options:
   -i, --query-file <QUERY_FILE>            Path to the query file
   -n, --num-rounds <NUM_ROUNDS>            Number of rounds per query [default: 100]
   -k, --num-k-mers <NUM_K_MERS>            Number of 8-mers [default: 32]
-  -t, --threshold <THRESHOLD>              8-mer hit-threshold [default: 0.3333333333333333]
+  -p, --threshold <THRESHOLD>              8-mer hit-threshold [default: 0.3333333333333333]
   -r, --num-results <NUM_RESULTS>          Number of output species per query [default: 5]
+  -t, --threads <THREADS>                  Number of threads [default: 0]
       --seed <SEED>                        Seed [default: 42]
   -o, --output <OUTPUT>                    Output path
   -v, --verbose...                         Increase logging verbosity

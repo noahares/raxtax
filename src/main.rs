@@ -13,6 +13,7 @@ use rayon::prelude::*;
 
 fn main() -> Result<()> {
     let args = io::Args::parse();
+    rayon::ThreadPoolBuilder::new().num_threads(args.threads).build_global().unwrap();
     env_logger::Builder::new()
         .filter_level(args.verbosity.log_level_filter())
         .init();
