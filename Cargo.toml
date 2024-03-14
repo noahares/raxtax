@@ -1,0 +1,28 @@
+[package]
+name = "make-sintax-great-again"
+version = "0.1.0"
+authors = ["Noah Wahl <noah.ares99@gmail.com>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = { version = "1.0.81", features = ["backtrace"] }
+bitvec = "1.0.1"
+clap = { version = "4.5.2", features = ["derive"] }
+clap-verbosity-flag = "2.2.0"
+env_logger = "0.11.3"
+exitcode = "1.1.2"
+itertools = "0.12.1"
+log = "0.4.21"
+logging_timer = "1.1.1"
+rand = "0.8.5"
+rayon = "1.9.0"
+serde = { version = "1.0.197", features = ["derive"] }
+serde_json = "1.0.114"
+
+[profile.ultra]
+inherits = "release"
+codegen-units = 1
+lto = true
+panic = "abort"
