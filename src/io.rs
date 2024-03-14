@@ -15,6 +15,15 @@ pub struct Args {
     /// Path to the database output
     #[arg(short = 'z', long)]
     pub database_output: Option<PathBuf>,
+    /// Path to the query file
+    #[arg(short, long)]
+    pub query_file: PathBuf,
+    /// Number of rounds per query
+    #[arg(short, long, default_value_t = 100)]
+    pub num_rounds: usize,
+    /// Seed
+    #[arg(short, long, default_value_t = 42)]
+    pub seed: u64,
     /// Output path
     #[arg(short, long)]
     pub output: Option<PathBuf>,

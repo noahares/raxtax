@@ -17,6 +17,7 @@ itertools = "0.12.1"
 log = "0.4.21"
 logging_timer = "1.1.1"
 rand = "0.8.5"
+rand_xoshiro = "0.6.0"
 rayon = "1.9.0"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.114"
