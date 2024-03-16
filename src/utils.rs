@@ -1,20 +1,24 @@
+use std::collections::HashSet;
+
 use itertools::Itertools;
 
 use crate::parser::LookupTables;
 
+// TODO: do not need to explicitely construct all k-mers but can just choose random start indices
+// and compute them on the fly
 pub fn sequence_to_kmers(sequence: &[u8]) -> Vec<u16> {
     let mut k_mer: u16 = 0;
-    let mut k_mers = Vec::new();
+    let mut k_mers = HashSet::new();
     sequence[0..8]
         .iter()
         .enumerate()
         .for_each(|(j, c)| k_mer |= (*c as u16) << (14 - j * 2));
-    k_mers.push(k_mer);
+    k_mers.insert(k_mer);
     sequence[8..].iter().for_each(|c| {
         k_mer = (k_mer << 2) | *c as u16;
-        k_mers.push(k_mer);
+        k_mers.insert(k_mer);
     });
-    k_mers
+    k_mers.into_iter().collect_vec()
 }
 
 pub fn accumulate_results(
@@ -29,13 +33,17 @@ pub fn accumulate_results(
     let mut order_values = vec![0.0; lookup_tables.level_hierarchy_maps[2].len()];
     let mut family_values = vec![0.0; lookup_tables.level_hierarchy_maps[3].len()];
     let mut genus_values = vec![0.0; lookup_tables.level_hierarchy_maps[4].len()];
+    let mut species_values = vec![0.0; lookup_tables.level_hierarchy_maps[5].len()];
     for (a, phylum) in lookup_tables.level_hierarchy_maps[0].iter().enumerate() {
         for class in phylum {
             for order in lookup_tables.level_hierarchy_maps[1][*class].iter() {
                 for family in lookup_tables.level_hierarchy_maps[2][*order].iter() {
                     for genus in lookup_tables.level_hierarchy_maps[3][*family].iter() {
                         for species in lookup_tables.level_hierarchy_maps[4][*genus].iter() {
-                            genus_values[*genus] += hit_buffer[*species];
+                            for sequence in lookup_tables.level_hierarchy_maps[5][*species].iter() {
+                                species_values[*species] += hit_buffer[*sequence];
+                            }
+                            genus_values[*genus] += species_values[*species];
                         }
                         family_values[*family] += genus_values[*genus];
                     }
@@ -98,13 +106,16 @@ pub fn accumulate_results(
                             lookup_tables.level_hierarchy_maps[4][*e]
                                 .iter()
                                 .sorted_by(|a, b| {
-                                    hit_buffer[**b].partial_cmp(&hit_buffer[**a]).unwrap()
+                                    species_values[**b]
+                                        .partial_cmp(&species_values[**a])
+                                        .unwrap()
                                 })
                         {
-                            if hit_buffer[*species] == 0.0 {
+                            if species_values[*species] == 0.0 {
                                 break;
                             }
-                            let label = &lookup_tables.labels[*species];
+                            let label = &lookup_tables.labels
+                                [lookup_tables.level_hierarchy_maps[5][*species][0]];
                             result_lines.push(format!(
                                 "{} {} {:.4}|{:.4}|{:.4}|{:.4}|{:.4}|{:.4}",
                                 query_label,
@@ -114,7 +125,7 @@ pub fn accumulate_results(
                                 order_values[*c],
                                 family_values[*d],
                                 genus_values[*e],
-                                hit_buffer[*species],
+                                species_values[*species],
                             ));
                             out_count += 1;
                             if out_count == cutoff {

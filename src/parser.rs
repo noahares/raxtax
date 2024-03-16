@@ -29,8 +29,8 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
     // Level 2: Order
     // Level 3: Family
     // Level 4: Genus
-    let mut level_sets: [HashSet<String>; 5] = Default::default();
-    // const ARRAY_REPEAT_VALUE: HashSet<usize> = HashSet::new();
+    // Level 5: Species
+    let mut level_sets: [HashSet<String>; 6] = Default::default();
     let mut k_mer_map: Vec<HashSet<usize>> = vec![HashSet::new(); 2 << 15];
     let labels = {
         let _tmr = timer!(Level::Info; "Read file and create k-mer mapping");
@@ -44,8 +44,7 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
         }
         let mut labels: Vec<String> = Vec::new();
         let mut current_sequence = Vec::<u8>::new();
-        let mut label_sequence_map: HashMap<String, Vec<Vec<u8>>> = HashMap::new();
-        let mut current_label = String::new();
+        let mut idx = 0;
 
         // create label and sequence vectors
         for line in lines {
@@ -54,20 +53,27 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
             }
             if let Some(label) = line.strip_prefix('>') {
                 let taxon_info = label.rsplitn(7, '|').map(|s| s.to_string()).collect_vec();
-                taxon_info[1..6]
+                taxon_info[0..6]
                     .iter()
                     .zip_eq((0..level_sets.len()).rev())
                     .for_each(|(name, idx)| {
                         level_sets[idx].insert(name.to_string());
                     });
                 if !current_sequence.is_empty() {
-                    label_sequence_map
-                        .entry(current_label.clone())
-                        .or_default()
-                        .push(current_sequence);
+                    let mut k_mer: u16 = 0;
+                    current_sequence[0..8]
+                        .iter()
+                        .enumerate()
+                        .for_each(|(j, c)| k_mer |= (*c as u16) << (14 - j * 2));
+                    k_mer_map[k_mer as usize].insert(idx);
+                    current_sequence[8..].iter().for_each(|c| {
+                        k_mer = (k_mer << 2) | *c as u16;
+                        k_mer_map[k_mer as usize].insert(idx);
+                    });
                     current_sequence = Vec::new();
+                    idx += 1;
                 }
-                current_label = taxon_info[0..6].iter().rev().join("|");
+                labels.push(taxon_info[0..6].iter().rev().join("|"));
             } else {
                 current_sequence.extend(line.chars().map(|c| -> u8 {
                     match c {
@@ -80,29 +86,16 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
                 }))
             }
         }
-        label_sequence_map
-            .entry(current_label)
-            .or_default()
-            .push(current_sequence);
-        label_sequence_map
+        let mut k_mer: u16 = 0;
+        current_sequence[0..8]
             .iter()
-            .sorted()
             .enumerate()
-            .for_each(|(idx, (label, sequences))| {
-                sequences.iter().for_each(|s| {
-                    let mut k_mer: u16 = 0;
-                    s[0..8]
-                        .iter()
-                        .enumerate()
-                        .for_each(|(j, c)| k_mer |= (*c as u16) << (14 - j * 2));
-                    k_mer_map[k_mer as usize].insert(idx);
-                    s[8..].iter().for_each(|c| {
-                        k_mer = (k_mer << 2) | *c as u16;
-                        k_mer_map[k_mer as usize].insert(idx);
-                    });
-                });
-                labels.push(label.to_string());
-            });
+            .for_each(|(j, c)| k_mer |= (*c as u16) << (14 - j * 2));
+        k_mer_map[k_mer as usize].insert(idx);
+        current_sequence[8..].iter().for_each(|c| {
+            k_mer = (k_mer << 2) | *c as u16;
+            k_mer_map[k_mer as usize].insert(idx);
+        });
         labels
     };
 
@@ -121,7 +114,8 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
     debug!("Unique Orders: {}", level_name_maps[2].len());
     debug!("Unique Families: {}", level_name_maps[3].len());
     debug!("Unique Genus: {}", level_name_maps[4].len());
-    debug!("Unique Species: {}", labels.iter().unique().count());
+    debug!("Unique Species: {}", level_name_maps[5].len());
+    debug!("Unique Sequences: {}", labels.len());
     // need reverse mapping for second parsing of labels and sequences to build data structure
     let level_rev_maps = level_name_maps
         .iter()
@@ -145,17 +139,18 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
         let order_idx = level_rev_maps[2][taxon_info[2]];
         let family_idx = level_rev_maps[3][taxon_info[3]];
         let genus_idx = level_rev_maps[4][taxon_info[4]];
+        let species_idx = level_rev_maps[5][taxon_info[5]];
 
         level_hierarchy_maps[0][phylum_idx].insert(class_idx);
         level_hierarchy_maps[1][class_idx].insert(order_idx);
         level_hierarchy_maps[2][order_idx].insert(family_idx);
         level_hierarchy_maps[3][family_idx].insert(genus_idx);
-        level_hierarchy_maps[4][genus_idx].insert(i);
+        level_hierarchy_maps[4][genus_idx].insert(species_idx);
+        level_hierarchy_maps[5][species_idx].insert(i);
     });
 
     Ok(LookupTables {
         labels,
-        // level_name_maps,
         level_hierarchy_maps: level_hierarchy_maps
             .into_iter()
             .map(|level| {
