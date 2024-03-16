@@ -14,7 +14,7 @@ pub struct LookupTables {
     pub labels: Vec<String>,
     // pub level_name_maps: Vec<Vec<String>>,
     pub level_hierarchy_maps: Vec<Vec<Vec<usize>>>,
-    pub k_mer_map: Vec<HashSet<usize>>,
+    pub k_mer_map: Vec<Vec<usize>>,
 }
 
 pub fn parse_reference_fasta_file(sequence_path: &PathBuf) -> Result<LookupTables> {
@@ -160,7 +160,10 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
                     .collect_vec()
             })
             .collect_vec(),
-        k_mer_map,
+        k_mer_map: k_mer_map
+            .into_iter()
+            .map(|seqs| seqs.into_iter().sorted().collect_vec())
+            .collect_vec(),
     })
 }
 

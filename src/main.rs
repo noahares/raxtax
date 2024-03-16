@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use clap::Parser;
 use itertools::Itertools;
 use log::Level;
@@ -10,6 +10,9 @@ use make_sintax_great_again::sintax::sintax;
 
 fn main() -> Result<()> {
     let args = io::Args::parse();
+    if args.num_k_mers >= 255 {
+        bail!("Using more than 255 k-mers will break this program because of buffer sizes!\nPlease choose fewer k-mers");
+    }
     rayon::ThreadPoolBuilder::new()
         .num_threads(args.threads)
         .build_global()

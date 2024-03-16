@@ -13,6 +13,7 @@ clap = { version = "4.5.2", features = ["derive"] }
 clap-verbosity-flag = "2.2.0"
 env_logger = "0.11.3"
 exitcode = "1.1.2"
+indicatif = { version = "0.17.8", features = ["rayon"] }
 itertools = "0.12.1"
 log = "0.4.21"
 logging_timer = "1.1.1"
