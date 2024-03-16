@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use indicatif::{ProgressIterator, ProgressStyle};
 use itertools::Itertools;
 use log::{debug, Level};
 use logging_timer::{time, timer};
@@ -47,45 +48,55 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
         let mut idx = 0;
 
         // create label and sequence vectors
-        for line in lines {
-            if line.starts_with(';') {
-                continue;
-            }
-            if let Some(label) = line.strip_prefix('>') {
-                let taxon_info = label.rsplitn(7, '|').map(|s| s.to_string()).collect_vec();
-                taxon_info[0..6]
-                    .iter()
-                    .zip_eq((0..level_sets.len()).rev())
-                    .for_each(|(name, idx)| {
-                        level_sets[idx].insert(name.to_string());
-                    });
-                if !current_sequence.is_empty() {
-                    let mut k_mer: u16 = 0;
-                    current_sequence[0..8]
-                        .iter()
-                        .enumerate()
-                        .for_each(|(j, c)| k_mer |= (*c as u16) << (14 - j * 2));
-                    k_mer_map[k_mer as usize].insert(idx);
-                    current_sequence[8..].iter().for_each(|c| {
-                        k_mer = (k_mer << 2) | *c as u16;
-                        k_mer_map[k_mer as usize].insert(idx);
-                    });
-                    current_sequence = Vec::new();
-                    idx += 1;
+        lines
+            .into_iter()
+            .progress_with_style(
+                ProgressStyle::with_template(
+                    "[{elapsed_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7}[{eta}] {msg}",
+                )
+                .unwrap()
+                .progress_chars("##-"),
+            )
+            .with_message("Parsing Reference...")
+            .for_each(|line| {
+                if line.starts_with(';') {
+                    return;
                 }
-                labels.push(taxon_info[0..6].iter().rev().join("|"));
-            } else {
-                current_sequence.extend(line.chars().map(|c| -> u8 {
-                    match c {
-                        'A' => 0b00,
-                        'C' => 0b01,
-                        'G' => 0b10,
-                        'T' => 0b11,
-                        _ => panic!("Unexpected character: {}", c),
+                if let Some(label) = line.strip_prefix('>') {
+                    let taxon_info = label.rsplitn(7, '|').map(|s| s.to_string()).collect_vec();
+                    taxon_info[0..6]
+                        .iter()
+                        .zip_eq((0..level_sets.len()).rev())
+                        .for_each(|(name, idx)| {
+                            level_sets[idx].insert(name.to_string());
+                        });
+                    if !current_sequence.is_empty() {
+                        let mut k_mer: u16 = 0;
+                        current_sequence[0..8]
+                            .iter()
+                            .enumerate()
+                            .for_each(|(j, c)| k_mer |= (*c as u16) << (14 - j * 2));
+                        k_mer_map[k_mer as usize].insert(idx);
+                        current_sequence[8..].iter().for_each(|c| {
+                            k_mer = (k_mer << 2) | *c as u16;
+                            k_mer_map[k_mer as usize].insert(idx);
+                        });
+                        current_sequence = Vec::new();
+                        idx += 1;
                     }
-                }))
-            }
-        }
+                    labels.push(taxon_info[0..6].iter().rev().join("|"));
+                } else {
+                    current_sequence.extend(line.chars().map(|c| -> u8 {
+                        match c {
+                            'A' => 0b00,
+                            'C' => 0b01,
+                            'G' => 0b10,
+                            'T' => 0b11,
+                            _ => panic!("Unexpected character: {}", c),
+                        }
+                    }))
+                }
+            });
         let mut k_mer: u16 = 0;
         current_sequence[0..8]
             .iter()

@@ -7,7 +7,7 @@ use rand::seq::SliceRandom;
 use rand::thread_rng;
 // use rand_xoshiro::rand_core::SeedableRng;
 // use rand_xoshiro::Xoshiro256PlusPlus;
-use indicatif::ParallelProgressIterator;
+use indicatif::{ParallelProgressIterator, ProgressStyle};
 use rayon::prelude::*;
 
 pub fn sintax(
@@ -20,7 +20,14 @@ pub fn sintax(
         .par_iter()
         .zip_eq(query_sequences.par_iter())
         .enumerate()
-        .progress_count(query_labels.len() as u64)
+        .progress_with_style(
+            ProgressStyle::with_template(
+                "[{elapsed_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7}[{eta}] {msg}",
+            )
+            .unwrap()
+            .progress_chars("##-"),
+        )
+        .with_message("Running Queries...")
         .map(|(i, (query_label, query_sequence))| {
             // let mut purged_runs = 0_usize;
             // WARN: if number of possible hits can get above 255, this breaks! <noahares>
