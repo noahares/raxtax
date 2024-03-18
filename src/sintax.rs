@@ -2,14 +2,14 @@ use crate::utils;
 use crate::{io::Args, parser::LookupTables};
 use itertools::Itertools;
 use log::Level;
-use logging_timer::timer;
+use logging_timer::{time, timer};
 use rand::seq::SliceRandom;
-use rand::thread_rng;
-// use rand_xoshiro::rand_core::SeedableRng;
-// use rand_xoshiro::Xoshiro256PlusPlus;
-use indicatif::{ParallelProgressIterator, ProgressStyle};
+use rand_xoshiro::rand_core::SeedableRng;
+use rand_xoshiro::Xoroshiro128PlusPlus;
+// use indicatif::{ParallelProgressIterator, ProgressStyle};
 use rayon::prelude::*;
 
+#[time("info")]
 pub fn sintax(
     query_data: &(Vec<String>, Vec<Vec<u8>>),
     lookup_table: &LookupTables,
@@ -20,35 +20,33 @@ pub fn sintax(
         .par_iter()
         .zip_eq(query_sequences.par_iter())
         .enumerate()
-        .progress_with_style(
-            ProgressStyle::with_template(
-                "[{elapsed_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7}[{eta}] {msg}",
-            )
-            .unwrap()
-            .progress_chars("##-"),
-        )
-        .with_message("Running Queries...")
+        // .progress_with_style(
+        //     ProgressStyle::with_template(
+        //         "[{elapsed_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7}[ETA:{eta}] {msg}",
+        //     )
+        //     .unwrap()
+        //     .progress_chars("##-"),
+        // )
+        // .with_message("Running Queries...")
         .map(|(i, (query_label, query_sequence))| {
             // let mut purged_runs = 0_usize;
             // WARN: if number of possible hits can get above 255, this breaks! <noahares>
             let mut buffer: Vec<u8> = vec![0; lookup_table.labels.len()];
             let mut hit_buffer: Vec<f64> = vec![0.0; lookup_table.labels.len()];
-            // let mut rng = Xoshiro256PlusPlus::seed_from_u64(args.seed);
-            let mut rng = thread_rng();
-            let _tmr = timer!(Level::Info; "Query Time");
+            let mut rng = Xoroshiro128PlusPlus::seed_from_u64(args.seed);
+            // let _tmr = timer!(Level::Debug; "Query Time");
             let k_mers = utils::sequence_to_kmers(query_sequence);
             (0..args.num_rounds).for_each(|_| {
                 buffer.fill(0);
-                let selected_kmers = k_mers
+                k_mers
                     .choose_multiple(&mut rng, args.num_k_mers)
-                    .collect_vec();
-                for query_kmer in selected_kmers {
-                    lookup_table.k_mer_map[*query_kmer as usize]
-                        .iter()
-                        .for_each(|species_id| {
-                            buffer[*species_id] += 1;
-                        });
-                }
+                    .for_each(|query_kmer| {
+                        lookup_table.k_mer_map[*query_kmer as usize]
+                            .iter()
+                            .for_each(|species_id| {
+                                buffer[*species_id] += 1;
+                            });
+                    });
                 let relevant_hits = buffer
                     .iter()
                     .enumerate()

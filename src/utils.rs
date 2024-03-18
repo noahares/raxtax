@@ -18,7 +18,7 @@ pub fn sequence_to_kmers(sequence: &[u8]) -> Vec<u16> {
         k_mer = (k_mer << 2) | *c as u16;
         k_mers.insert(k_mer);
     });
-    k_mers.into_iter().collect_vec()
+    k_mers.into_iter().sorted().collect_vec()
 }
 
 pub fn accumulate_results(

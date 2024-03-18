@@ -3,6 +3,7 @@ use indicatif::{ProgressIterator, ProgressStyle};
 use itertools::Itertools;
 use log::{debug, Level};
 use logging_timer::{time, timer};
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
@@ -13,7 +14,6 @@ use std::{
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct LookupTables {
     pub labels: Vec<String>,
-    // pub level_name_maps: Vec<Vec<String>>,
     pub level_hierarchy_maps: Vec<Vec<Vec<usize>>>,
     pub k_mer_map: Vec<Vec<usize>>,
 }
@@ -32,59 +32,44 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
     // Level 4: Genus
     // Level 5: Species
     let mut level_sets: [HashSet<String>; 6] = Default::default();
-    let mut k_mer_map: Vec<HashSet<usize>> = vec![HashSet::new(); 2 << 15];
+    let mut k_mer_map: Vec<Vec<usize>> = vec![Vec::new(); 2 << 15];
     let labels = {
         let _tmr = timer!(Level::Info; "Read file and create k-mer mapping");
         let lines: Vec<String> = fasta_str
             .lines()
             .map(|l| l.trim().to_string())
-            .filter(|l| !l.is_empty())
+            .filter(|l| !l.is_empty() && !l.starts_with(';'))
             .collect();
-        if !lines[0].starts_with(['>', ';']) {
+        if !lines[0].starts_with('>') {
             bail!("Not a valid FASTA file")
         }
         let mut labels: Vec<String> = Vec::new();
+        let mut sequences: Vec<Vec<u8>> = Vec::new();
         let mut current_sequence = Vec::<u8>::new();
-        let mut idx = 0;
 
         // create label and sequence vectors
         lines
             .into_iter()
             .progress_with_style(
                 ProgressStyle::with_template(
-                    "[{elapsed_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7}[{eta}] {msg}",
+                    "[{elapsed_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7}[ETA:{eta}] {msg}",
                 )
                 .unwrap()
                 .progress_chars("##-"),
             )
             .with_message("Parsing Reference...")
             .for_each(|line| {
-                if line.starts_with(';') {
-                    return;
-                }
                 if let Some(label) = line.strip_prefix('>') {
-                    let taxon_info = label.rsplitn(7, '|').map(|s| s.to_string()).collect_vec();
-                    taxon_info[0..6]
-                        .iter()
-                        .zip_eq((0..level_sets.len()).rev())
-                        .for_each(|(name, idx)| {
-                            level_sets[idx].insert(name.to_string());
-                        });
-                    if !current_sequence.is_empty() {
-                        let mut k_mer: u16 = 0;
-                        current_sequence[0..8]
+                    labels.push(
+                        label.rsplitn(7, '|').collect_vec()[0..6]
                             .iter()
-                            .enumerate()
-                            .for_each(|(j, c)| k_mer |= (*c as u16) << (14 - j * 2));
-                        k_mer_map[k_mer as usize].insert(idx);
-                        current_sequence[8..].iter().for_each(|c| {
-                            k_mer = (k_mer << 2) | *c as u16;
-                            k_mer_map[k_mer as usize].insert(idx);
-                        });
+                            .rev()
+                            .join("|"),
+                    );
+                    if !current_sequence.is_empty() {
+                        sequences.push(current_sequence.clone());
                         current_sequence = Vec::new();
-                        idx += 1;
                     }
-                    labels.push(taxon_info[0..6].iter().rev().join("|"));
                 } else {
                     current_sequence.extend(line.chars().map(|c| -> u8 {
                         match c {
@@ -97,23 +82,48 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
                     }))
                 }
             });
-        let mut k_mer: u16 = 0;
-        current_sequence[0..8]
-            .iter()
-            .enumerate()
-            .for_each(|(j, c)| k_mer |= (*c as u16) << (14 - j * 2));
-        k_mer_map[k_mer as usize].insert(idx);
-        current_sequence[8..].iter().for_each(|c| {
-            k_mer = (k_mer << 2) | *c as u16;
-            k_mer_map[k_mer as usize].insert(idx);
-        });
+        sequences.push(current_sequence);
+        let mut ordered_labels: Vec<String> = Vec::new();
         labels
+            .iter()
+            .zip_eq(sequences)
+            .sorted_by_key(|(l, _)| *l)
+            .enumerate()
+            .progress_with_style(
+                ProgressStyle::with_template(
+                    "[{elapsed_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7}[ETA:{eta}] {msg}",
+                )
+                .unwrap()
+                .progress_chars("##-"),
+            )
+            .with_message("Creating k-mer map...")
+            .for_each(|(idx, (l, s))| {
+                let taxon_info = l.split('|').collect_vec();
+                taxon_info[0..6]
+                    .iter()
+                    .zip_eq(0..level_sets.len())
+                    .for_each(|(name, idx)| {
+                        level_sets[idx].insert(name.to_string());
+                    });
+                ordered_labels.push(l.to_string());
+                let mut k_mer: u16 = 0;
+                s[0..8]
+                    .iter()
+                    .enumerate()
+                    .for_each(|(j, c)| k_mer |= (*c as u16) << (14 - j * 2));
+                k_mer_map[k_mer as usize].push(idx);
+                s[8..].iter().for_each(|c| {
+                    k_mer = (k_mer << 2) | *c as u16;
+                    k_mer_map[k_mer as usize].push(idx);
+                });
+            });
+        ordered_labels
     };
 
-    debug!(
-        "Average number of sequences per kmer: {}",
-        k_mer_map.iter().map(|e| e.len() as f64).sum::<f64>() / k_mer_map.len() as f64
-    );
+    // debug!(
+    //     "Average number of sequences per kmer: {}",
+    //     k_mer_map.iter().map(|e| e.len() as f64).sum::<f64>() / k_mer_map.len() as f64
+    // );
 
     // create mapping to index for each taxonomical level
     let level_name_maps = level_sets
@@ -167,14 +177,14 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
             .map(|level| {
                 level
                     .into_iter()
-                    .map(|item| item.into_iter().collect_vec())
+                    .map(|item| item.into_iter().sorted().collect_vec())
                     .collect_vec()
             })
             .collect_vec(),
         k_mer_map: k_mer_map
-            .into_iter()
-            .map(|seqs| seqs.into_iter().sorted().collect_vec())
-            .collect_vec(),
+            .into_par_iter()
+            .map(|seqs| seqs.into_iter().unique().sorted().collect_vec())
+            .collect(),
     })
 }
 
@@ -188,9 +198,9 @@ pub fn parse_query_fasta_str(fasta_str: &str) -> Result<(Vec<String>, Vec<Vec<u8
     let lines: Vec<String> = fasta_str
         .lines()
         .map(|l| l.trim().to_string())
-        .filter(|l| !l.is_empty())
+        .filter(|l| !l.is_empty() && !l.starts_with(';'))
         .collect();
-    if !lines[0].starts_with(['>', ';']) {
+    if !lines[0].starts_with('>') {
         bail!("Not a valid FASTA file")
     }
     let mut labels: Vec<String> = Vec::new();
@@ -199,12 +209,9 @@ pub fn parse_query_fasta_str(fasta_str: &str) -> Result<(Vec<String>, Vec<Vec<u8
 
     // create label and sequence vectors
     for line in lines {
-        if line.starts_with(';') {
-            continue;
-        }
         if let Some(label) = line.strip_prefix('>') {
             labels.push(label.to_string());
-            if labels.len() > 1 {
+            if !current_sequence.is_empty() {
                 sequences.push(current_sequence);
                 current_sequence = Vec::new();
             }
