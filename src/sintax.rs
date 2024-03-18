@@ -1,12 +1,12 @@
 use crate::utils;
 use crate::{io::Args, parser::LookupTables};
+use indicatif::{ParallelProgressIterator, ProgressStyle};
 use itertools::Itertools;
 use log::Level;
 use logging_timer::{time, timer};
 use rand::seq::SliceRandom;
 use rand_xoshiro::rand_core::SeedableRng;
 use rand_xoshiro::Xoroshiro128PlusPlus;
-// use indicatif::{ParallelProgressIterator, ProgressStyle};
 use rayon::prelude::*;
 
 #[time("info")]
@@ -15,26 +15,26 @@ pub fn sintax(
     lookup_table: &LookupTables,
     args: &Args,
 ) -> Vec<String> {
+    let threshold = f64::ceil(args.num_k_mers as f64 * args.threshold) as u8;
     let (query_labels, query_sequences) = query_data;
     query_labels
         .par_iter()
         .zip_eq(query_sequences.par_iter())
         .enumerate()
-        // .progress_with_style(
-        //     ProgressStyle::with_template(
-        //         "[{elapsed_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7}[ETA:{eta}] {msg}",
-        //     )
-        //     .unwrap()
-        //     .progress_chars("##-"),
-        // )
-        // .with_message("Running Queries...")
+        .progress_with_style(
+            ProgressStyle::with_template(
+                "[{elapsed_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7}[ETA:{eta}] {msg}",
+            )
+            .unwrap()
+            .progress_chars("##-"),
+        )
+        .with_message("Running Queries...")
         .map(|(i, (query_label, query_sequence))| {
-            // let mut purged_runs = 0_usize;
             // WARN: if number of possible hits can get above 255, this breaks! <noahares>
             let mut buffer: Vec<u8> = vec![0; lookup_table.labels.len()];
             let mut hit_buffer: Vec<f64> = vec![0.0; lookup_table.labels.len()];
             let mut rng = Xoroshiro128PlusPlus::seed_from_u64(args.seed);
-            // let _tmr = timer!(Level::Debug; "Query Time");
+            let _tmr = timer!(Level::Debug; "Query Time");
             let k_mers = utils::sequence_to_kmers(query_sequence);
             (0..args.num_rounds).for_each(|_| {
                 buffer.fill(0);
@@ -50,7 +50,7 @@ pub fn sintax(
                 let relevant_hits = buffer
                     .iter()
                     .enumerate()
-                    .filter(|(_, h)| *h >= &11_u8)
+                    .filter(|(_, h)| **h >= threshold)
                     .max_set_by_key(|(_, &value)| value);
                 let num_hits = relevant_hits.len();
                 relevant_hits.into_iter().for_each(|(idx, _)| {

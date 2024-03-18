@@ -1,11 +1,10 @@
 use std::collections::HashSet;
 
 use itertools::Itertools;
+use logging_timer::time;
 
 use crate::parser::LookupTables;
 
-// TODO: do not need to explicitely construct all k-mers but can just choose random start indices
-// and compute them on the fly
 pub fn sequence_to_kmers(sequence: &[u8]) -> Vec<u16> {
     let mut k_mer: u16 = 0;
     let mut k_mers = HashSet::new();
@@ -21,6 +20,7 @@ pub fn sequence_to_kmers(sequence: &[u8]) -> Vec<u16> {
     k_mers.into_iter().sorted().collect_vec()
 }
 
+#[time("debug")]
 pub fn accumulate_results(
     lookup_tables: &LookupTables,
     hit_buffer: &[f64],
@@ -36,21 +36,32 @@ pub fn accumulate_results(
     let mut species_values = vec![0.0; lookup_tables.level_hierarchy_maps[5].len()];
     for (a, phylum) in lookup_tables.level_hierarchy_maps[0].iter().enumerate() {
         for class in phylum {
-            for order in lookup_tables.level_hierarchy_maps[1][*class].iter() {
-                for family in lookup_tables.level_hierarchy_maps[2][*order].iter() {
-                    for genus in lookup_tables.level_hierarchy_maps[3][*family].iter() {
-                        for species in lookup_tables.level_hierarchy_maps[4][*genus].iter() {
-                            for sequence in lookup_tables.level_hierarchy_maps[5][*species].iter() {
-                                species_values[*species] += hit_buffer[*sequence];
-                            }
-                            genus_values[*genus] += species_values[*species];
-                        }
-                        family_values[*family] += genus_values[*genus];
-                    }
-                    order_values[*order] += family_values[*family];
-                }
-                class_values[*class] += order_values[*order];
-            }
+            lookup_tables.level_hierarchy_maps[1][*class]
+                .iter()
+                .for_each(|order| {
+                    lookup_tables.level_hierarchy_maps[2][*order]
+                        .iter()
+                        .for_each(|family| {
+                            lookup_tables.level_hierarchy_maps[3][*family]
+                                .iter()
+                                .for_each(|genus| {
+                                    lookup_tables.level_hierarchy_maps[4][*genus]
+                                        .iter()
+                                        .for_each(|species| {
+                                            lookup_tables.level_hierarchy_maps[5][*species]
+                                                .iter()
+                                                .for_each(|sequence| {
+                                                    species_values[*species] +=
+                                                        hit_buffer[*sequence];
+                                                });
+                                            genus_values[*genus] += species_values[*species];
+                                        });
+                                    family_values[*family] += genus_values[*genus];
+                                });
+                            order_values[*order] += family_values[*family];
+                        });
+                    class_values[*class] += order_values[*order];
+                });
             phylum_values[a] += class_values[*class];
         }
     }
