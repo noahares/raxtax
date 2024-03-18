@@ -268,11 +268,11 @@ ATACGCTTTGCGT";
                 .iter()
                 .sorted()
                 .collect_vec(),
-            &[&1, &3, &4]
+            &[&1, &4, &5]
         );
         assert_eq!(
             k_mer_map[0b110011100111010_usize].iter().collect_vec(),
-            &[&2]
+            &[&3]
         );
     }
 
@@ -308,11 +308,11 @@ AAACCCCGG";
         // }
         assert_eq!(
             k_mer_map[0b101010110_usize].iter().sorted().collect_vec(),
-            &[&0, &2]
+            &[&0, &4]
         );
         assert_eq!(
             k_mer_map[0b10101011010_usize].iter().sorted().collect_vec(),
-            &[&0, &2]
+            &[&1, &4]
         );
         assert_eq!(
             k_mer_map[0b10101011011_usize].iter().sorted().collect_vec(),
@@ -323,13 +323,6 @@ AAACCCCGG";
                 .iter()
                 .sorted()
                 .collect_vec(),
-            &[&0]
-        );
-        assert_eq!(
-            k_mer_map[0b1111000000000101_usize]
-                .iter()
-                .sorted()
-                .collect_vec(),
             &[&1]
         );
         assert_eq!(
@@ -337,14 +330,21 @@ AAACCCCGG";
                 .iter()
                 .sorted()
                 .collect_vec(),
-            &[&1]
+            &[&2]
+        );
+        assert_eq!(
+            k_mer_map[0b1111000000000101_usize]
+                .iter()
+                .sorted()
+                .collect_vec(),
+            &[&2]
         );
         assert_eq!(
             k_mer_map[0b1111110000000001_usize]
                 .iter()
                 .sorted()
                 .collect_vec(),
-            &[&1]
+            &[&2, &3]
         );
     }
 }

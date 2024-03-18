@@ -71,21 +71,49 @@ pub fn sintax(
 
 #[cfg(test)]
 mod tests {
+    use clap::Parser;
     use itertools::Itertools;
 
-    use crate::parser::LookupTables;
+    use crate::{
+        io::Args,
+        parser::{parse_query_fasta_str, parse_reference_fasta_str},
+    };
 
-    use crate::parser::{parse_query_fasta_str, parse_reference_fasta_str};
+    use super::sintax;
 
     #[test]
     fn test_sintax() {
-        let fasta_str = r" >BOLD:AAP6467|SSBAE436-13|Canada|Arthropoda|Insecta|Diptera|Sciaridae|Claustropyga|Claustropyga_acanthostyla
-TTTATCTTCTACATTATCTCACTCAGGGGCTTCAGTAGATCTATCTATTTTTTCTTTACATTTAGCAGGTATTTCATCAATTTTAGGAGCTGTAAATTTTATTTCTACTATTATTAATATACGAGCGCCAGGAATATCTTTTGATAAAATACCCTTATTTATTTGATCTGTATTAATTACAGCAATTTTATTATTATTATCATTA";
-        let LookupTables { k_mer_map, .. } = parse_reference_fasta_str(fasta_str).unwrap();
+        let args = Args {
+            sequence_file: "".into(),
+            query_file: "".into(),
+            database_path: None,
+            database_output: None,
+            num_rounds: 100,
+            num_k_mers: 32,
+            threshold: 1.0 / 3.0,
+            num_results: 3,
+            threads: 1,
+            seed: 42,
+            output: None,
+            verbosity: clap_verbosity_flag::Verbosity::default(),
+        };
+        let fasta_str = r">BOLD:AAP6467|SSBAE436-13|Canada|Arthropoda|Insecta|Diptera|Sciaridae|Claustropyga|Claustropyga_acanthostyla
+TTTATCTTCTACATTATCTCACTCAGGGGCTTCAGTAGATCTATCTATTTTTTCTTTACATTTAGCAGGTATTTCATCAATTTTAGGAGCTGTAAATTTTATTTCTACTATTATTAATATACGAGCGCCAGGAATATCTTTTGATAAAATACCCTTATTTATTTGATCTGTATTAATTACAGCAATTTTATTATTATTATCATTA
+>BOLD:AAP6467|GMOXC9016-15|Canada|Arthropoda|Insecta|Diptera|Sciaridae|Claustropyga|Claustropyga_acanthostyla
+TTTATCTTCTACATTATCTCATTCAGGAGCTTCAGTAGATCTATCTATTTTTTCTTTACATTTAGCAGGTATTTCATCAATTTTAGGGGCTGTAAATTTTATTTCTACTATTATTAATATACGAGCGCCAGGAATATCTTTTGATAAAATACCCTTATTTATTTGATCTGTATTAATTACAGCAATTTTATTATTATTATCATTA
+>BOLD:AAP6467|GMOAB1920-21|Canada|Arthropoda|Insecta|Diptera|Sciaridae|Claustropyga|Claustropyga_acanthostyla
+TTTATCTTCTACATTATCTCATTCAGGAGCTTCAGTAGATCTATCTATTTTTTCTTTACATTTAGCAGGTATTTCATCAATTTTAGGGGCTGTAAATTTTATTTCTACTATTATTAATATGCGAGCGCCAGGAATATCTTTTGATAAAATACCCTTATTTATTTGATCTGTATTAATTACAGCAATTTTATTATTATTATCATTA
+>BOLD:AAP6467|SSJAD1807-13|Canada|Arthropoda|Insecta|Diptera|Sciaridae|Claustropyga|Claustropyga_acanthostyla
+TTTATCTTCTACATTATCTCACTCAGGAGCTTCAGTAGATCTATCTATTTTTTCTTTACATTTAGCAGGTATTTCATCAATTTTAGGGGCTGTAAACTTTATTTCTACTATTATTAATATACGAGCACCAGGAATATCTTTTGATAAAATACCCTTATTTATTTGATCTGTATTAATTACAGCAATTTTATTATTATTATCATTA
+>BOLD:AAP6467|CNBFF377-15|Canada|Arthropoda|Insecta|Diptera|Sciaridae|Claustropyga|Claustropyga_acanthostyla
+TTTATCTTCTACATTATCTCACTCAGGAGCTTCAGTAGACCTATCTATTTTTTCTTTACATTTAGCCGGTATTTCATCAATTTTAGGAGCTGTAAATTTTATTTCTACTATTATTAATATACGAGCACCAGGAATATCTTTTGATAAAATACCTTTATTTATTTGATCTGTATTAATTACAGCAATTTTATTATTATTATCATTA";
+        let lookup_table = parse_reference_fasta_str(fasta_str).unwrap();
         let query_str = r" >ESV_1;size=200394
 TCTTTCATCTACTTTATCTCATTCAGGGGCTTCAGTAGATCTTTCTATTTTTTCCCTTCATTTAGCTGGAATTTCTTCAATTTTAGGGGCTGTAAATTTCATTTCAACTATTATTAATATACGGACACCAGGGATATCTTTTGATAAAATGTCTTTATTTATTTGATCGGTATTAATCACGGCCATTCTTTTGCTTTTATCATTA
 ";
-        let (_, sequences) = parse_query_fasta_str(query_str).unwrap();
-        // let k_mer_match = k_mer_map.keys
+        let query_data = parse_query_fasta_str(query_str).unwrap();
+        let result = sintax(&query_data, &lookup_table, &args);
+        assert_eq!(vec![
+    "ESV_1;size=200394 Arthropoda|Insecta|Diptera|Sciaridae|Claustropyga|Claustropyga_acanthostyla 0.4700|0.4700|0.4700|0.4700|0.4700|0.4700".to_string()], result);
     }
 }
