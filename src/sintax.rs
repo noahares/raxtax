@@ -44,7 +44,7 @@ pub fn sintax(
                         lookup_table.k_mer_map[*query_kmer as usize]
                             .iter()
                             .for_each(|species_id| {
-                                buffer[*species_id] += 1;
+                                unsafe { *buffer.get_unchecked_mut(*species_id) += 1 };
                             });
                     });
                 let relevant_hits = buffer
@@ -53,8 +53,15 @@ pub fn sintax(
                     .filter(|(_, h)| **h >= threshold)
                     .max_set_by_key(|(_, &value)| value);
                 let num_hits = relevant_hits.len();
+                debug_assert!(
+                    relevant_hits.iter().tuple_windows().all(|(a, b)| a.0 < b.0)
+                        && relevant_hits.last().unwrap().0 < hit_buffer.len()
+                );
                 relevant_hits.into_iter().for_each(|(idx, _)| {
-                    hit_buffer[idx] += 1.0 / (num_hits * args.num_rounds) as f64
+                    unsafe {
+                        *hit_buffer.get_unchecked_mut(idx) +=
+                            1.0 / (num_hits * args.num_rounds) as f64
+                    };
                 });
             });
             (
@@ -71,8 +78,6 @@ pub fn sintax(
 
 #[cfg(test)]
 mod tests {
-    use clap::Parser;
-    use itertools::Itertools;
 
     use crate::{
         io::Args,
