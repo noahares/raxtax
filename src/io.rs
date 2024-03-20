@@ -6,30 +6,24 @@ use std::{io::Write, path::PathBuf};
 #[derive(Parser)]
 #[command(author, version, about)]
 pub struct Args {
-    /// Path to the sequence file
+    /// Path to the database fasta file
     #[arg(short, long)]
-    pub sequence_file: PathBuf,
-    /// Path to the existing database
-    #[arg(short = 'd', long)]
-    pub database_path: Option<PathBuf>,
-    /// Path to the database output
-    #[arg(short = 'z', long)]
-    pub database_output: Option<PathBuf>,
+    pub database_path: PathBuf,
     /// Path to the query file
     #[arg(short = 'i', long)]
     pub query_file: PathBuf,
     /// Number of rounds per query
     #[arg(short, long, default_value_t = 100)]
-    pub num_rounds: usize,
+    pub num_iterations: usize,
     /// Number of 8-mers
     #[arg(short = 'k', long, default_value_t = 32)]
     pub num_k_mers: usize,
     /// 8-mer hit-threshold
-    #[arg(short = 'p', long, default_value_t = 1.0 / 3.0)]
-    pub threshold: f64,
+    #[arg(short = 'f', long, default_value_t = 1.0 / 3.0)]
+    pub min_hit_fraction: f64,
     /// Number of output species per query
-    #[arg(short = 'r', long, default_value_t = 5)]
-    pub num_results: usize,
+    #[arg(short = 'm', long, default_value_t = 5)]
+    pub max_target_seqs: usize,
     /// Number of threads
     #[arg(short, long, default_value_t = 0)]
     pub threads: usize,

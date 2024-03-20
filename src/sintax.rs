@@ -2,7 +2,7 @@ use crate::utils;
 use crate::{io::Args, parser::LookupTables};
 use indicatif::{ParallelProgressIterator, ProgressStyle};
 use itertools::Itertools;
-use log::Level;
+use log::{debug, Level};
 use logging_timer::{time, timer};
 use rand::seq::SliceRandom;
 use rand_xoshiro::rand_core::SeedableRng;
@@ -15,7 +15,7 @@ pub fn sintax(
     lookup_table: &LookupTables,
     args: &Args,
 ) -> Vec<String> {
-    let threshold = f64::ceil(args.num_k_mers as f64 * args.threshold) as u8;
+    let threshold = f64::ceil(args.num_k_mers as f64 * args.min_hit_fraction) as u8;
     let (query_labels, query_sequences) = query_data;
     query_labels
         .par_iter()
@@ -30,13 +30,25 @@ pub fn sintax(
         )
         .with_message("Running Queries...")
         .map(|(i, (query_label, query_sequence))| {
+            if let Some(&label_idx) = lookup_table.sequences.get(query_sequence) {
+                debug!("Exact sequence match for query {query_label}!");
+                return (
+                    i,
+                    vec![format!(
+                        "{}\t{}\t{}",
+                        query_label,
+                        lookup_table.labels[label_idx],
+                        ["1.0"; 6].join("|")
+                    )],
+                );
+            }
             // WARN: if number of possible hits can get above 255, this breaks! <noahares>
             let mut buffer: Vec<u8> = vec![0; lookup_table.labels.len()];
             let mut hit_buffer: Vec<f64> = vec![0.0; lookup_table.labels.len()];
             let mut rng = Xoroshiro128PlusPlus::seed_from_u64(args.seed);
             let _tmr = timer!(Level::Debug; "Query Time");
             let k_mers = utils::sequence_to_kmers(query_sequence);
-            (0..args.num_rounds).for_each(|_| {
+            (0..args.num_iterations).for_each(|_| {
                 buffer.fill(0);
                 k_mers
                     .choose_multiple(&mut rng, args.num_k_mers)
@@ -60,13 +72,18 @@ pub fn sintax(
                 relevant_hits.into_iter().for_each(|(idx, _)| {
                     unsafe {
                         *hit_buffer.get_unchecked_mut(idx) +=
-                            1.0 / (num_hits * args.num_rounds) as f64
+                            1.0 / (num_hits * args.num_iterations) as f64
                     };
                 });
             });
             (
                 i,
-                utils::accumulate_results(lookup_table, &hit_buffer, args.num_results, query_label),
+                utils::accumulate_results(
+                    lookup_table,
+                    &hit_buffer,
+                    args.max_target_seqs,
+                    query_label,
+                ),
             )
         })
         .collect::<Vec<(usize, Vec<String>)>>()
@@ -89,14 +106,14 @@ mod tests {
     #[test]
     fn test_sintax() {
         let args = Args {
-            sequence_file: "".into(),
+            database_path: "".into(),
             query_file: "".into(),
             database_path: None,
             database_output: None,
-            num_rounds: 100,
+            num_iterations: 100,
             num_k_mers: 32,
-            threshold: 1.0 / 3.0,
-            num_results: 3,
+            min_hit_fraction: 1.0 / 3.0,
+            max_target_seqs: 3,
             threads: 1,
             seed: 42,
             output: None,

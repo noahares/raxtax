@@ -14,6 +14,7 @@ use std::{
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct LookupTables {
     pub labels: Vec<String>,
+    pub sequences: HashMap<Vec<u8>, usize>,
     pub level_hierarchy_maps: Vec<Vec<Vec<usize>>>,
     pub k_mer_map: Vec<Vec<usize>>,
 }
@@ -33,7 +34,7 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
     // Level 5: Species
     let mut level_sets: [HashSet<String>; 6] = Default::default();
     let mut k_mer_map: Vec<Vec<usize>> = vec![Vec::new(); 2 << 15];
-    let labels = {
+    let (labels, sequences) = {
         let _tmr = timer!(Level::Info; "Read file and create k-mer mapping");
         let lines: Vec<String> = fasta_str
             .lines()
@@ -84,6 +85,7 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
             });
         sequences.push(current_sequence);
         let mut ordered_labels: Vec<String> = Vec::new();
+        let mut sequence_map: HashMap<Vec<u8>, usize> = HashMap::new();
         labels
             .iter()
             .zip_eq(sequences)
@@ -106,6 +108,7 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
                         level_sets[idx].insert(name.to_string());
                     });
                 ordered_labels.push(l.to_string());
+                sequence_map.insert(s.clone(), idx);
                 let mut k_mer: u16 = 0;
                 s[0..8]
                     .iter()
@@ -117,7 +120,7 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
                     k_mer_map[k_mer as usize].push(idx);
                 });
             });
-        ordered_labels
+        (ordered_labels, sequence_map)
     };
 
     // debug!(
@@ -172,6 +175,7 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
 
     Ok(LookupTables {
         labels,
+        sequences,
         level_hierarchy_maps: level_hierarchy_maps
             .into_iter()
             .map(|level| {
