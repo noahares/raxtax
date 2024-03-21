@@ -10,11 +10,11 @@ use rand_xoshiro::Xoroshiro128PlusPlus;
 use rayon::prelude::*;
 
 #[time("info")]
-pub fn sintax(
-    query_data: &(Vec<String>, Vec<Vec<u8>>),
-    lookup_table: &LookupTables,
+pub fn sintax<'a, 'b>(
+    query_data: &'b (Vec<String>, Vec<Vec<u8>>),
+    lookup_table: &'a LookupTables,
     args: &Args,
-) -> Vec<String> {
+) -> Vec<(&'b String, Option<Vec<(&'a String, Vec<f64>)>>)> {
     let threshold = f64::ceil(args.num_k_mers as f64 * args.min_hit_fraction) as u8;
     let (query_labels, query_sequences) = query_data;
     query_labels
@@ -34,12 +34,8 @@ pub fn sintax(
                 debug!("Exact sequence match for query {query_label}!");
                 return (
                     i,
-                    vec![format!(
-                        "{}\t{}\t{}",
-                        query_label,
-                        lookup_table.labels[label_idx],
-                        ["1.0"; 6].join("|")
-                    )],
+                    query_label,
+                    Some(vec![(&lookup_table.labels[label_idx], vec![1.0; 6])]),
                 );
             }
             // WARN: if number of possible hits can get above 255, this breaks! <noahares>
@@ -78,18 +74,14 @@ pub fn sintax(
             });
             (
                 i,
-                utils::accumulate_results(
-                    lookup_table,
-                    &hit_buffer,
-                    args.max_target_seqs,
-                    query_label,
-                ),
+                query_label,
+                utils::accumulate_results(lookup_table, &hit_buffer, args.max_target_seqs),
             )
         })
-        .collect::<Vec<(usize, Vec<String>)>>()
+        .collect::<Vec<(usize, &String, Option<Vec<(&String, Vec<f64>)>>)>>()
         .into_iter()
-        .sorted_by_key(|(i, _)| *i)
-        .map(|(_, r)| r.join("\n"))
+        .sorted_by_key(|(i, _, _)| *i)
+        .map(|(_, q, v)| (q, v))
         .collect_vec()
 }
 
@@ -108,8 +100,6 @@ mod tests {
         let args = Args {
             database_path: "".into(),
             query_file: "".into(),
-            database_path: None,
-            database_output: None,
             num_iterations: 100,
             num_k_mers: 32,
             min_hit_fraction: 1.0 / 3.0,
@@ -118,6 +108,8 @@ mod tests {
             seed: 42,
             output: None,
             verbosity: clap_verbosity_flag::Verbosity::default(),
+            min_confidence: 0.0,
+            confidence_output: None,
         };
         let fasta_str = r">BOLD:AAP6467|SSBAE436-13|Canada|Arthropoda|Insecta|Diptera|Sciaridae|Claustropyga|Claustropyga_acanthostyla
 TTTATCTTCTACATTATCTCACTCAGGGGCTTCAGTAGATCTATCTATTTTTTCTTTACATTTAGCAGGTATTTCATCAATTTTAGGAGCTGTAAATTTTATTTCTACTATTATTAATATACGAGCGCCAGGAATATCTTTTGATAAAATACCCTTATTTATTTGATCTGTATTAATTACAGCAATTTTATTATTATTATCATTA
@@ -135,7 +127,12 @@ TCTTTCATCTACTTTATCTCATTCAGGGGCTTCAGTAGATCTTTCTATTTTTTCCCTTCATTTAGCTGGAATTTCTTCAA
 ";
         let query_data = parse_query_fasta_str(query_str).unwrap();
         let result = sintax(&query_data, &lookup_table, &args);
-        assert_eq!(vec![
-    "ESV_1;size=200394 Arthropoda|Insecta|Diptera|Sciaridae|Claustropyga|Claustropyga_acanthostyla 0.4700|0.4700|0.4700|0.4700|0.4700|0.4700".to_string()], result);
+        assert_eq!(
+            vec![(
+                &query_data.0[0],
+                Some(vec![(&lookup_table.labels[0], vec![0.0; 6])])
+            )],
+            result
+        );
     }
 }

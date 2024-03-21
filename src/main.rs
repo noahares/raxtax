@@ -1,12 +1,11 @@
 use anyhow::{bail, Result};
 use clap::Parser;
-use itertools::Itertools;
 use log::Level;
 use logging_timer::timer;
 use make_sintax_great_again::io;
 use make_sintax_great_again::parser;
 use make_sintax_great_again::sintax::sintax;
-// use make_sintax_great_again::utils;
+use make_sintax_great_again::utils;
 
 fn main() -> Result<()> {
     let args = io::Args::parse();
@@ -23,9 +22,10 @@ fn main() -> Result<()> {
     let _total_tmr = timer!(Level::Info; "Total Runtime");
     let lookup_table = parser::parse_reference_fasta_file(&args.database_path)?;
     let query_data = parser::parse_query_fasta_file(&args.query_file)?;
-    let mut output = args.get_output()?;
+    let output = args.get_output()?;
+    let confidence_output = args.get_confidence_output()?;
     let result = sintax(&query_data, &lookup_table, &args);
-    writeln!(output, "{}", result.into_iter().join("\n"))?;
+    utils::output_results(&result, output, confidence_output, args.min_confidence)?;
 
     Ok(())
 }

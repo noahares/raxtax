@@ -21,6 +21,9 @@ pub struct Args {
     /// 8-mer hit-threshold
     #[arg(short = 'f', long, default_value_t = 1.0 / 3.0)]
     pub min_hit_fraction: f64,
+    /// Confidence threshold
+    #[arg(short = 'c', long, default_value_t = 0.8)]
+    pub min_confidence: f64,
     /// Number of output species per query
     #[arg(short = 'm', long, default_value_t = 5)]
     pub max_target_seqs: usize,
@@ -33,6 +36,9 @@ pub struct Args {
     /// Output path
     #[arg(short, long)]
     pub output: Option<PathBuf>,
+    /// confidence output path
+    #[arg(short = 'u', long)]
+    pub confidence_output: Option<PathBuf>,
     #[command(flatten)]
     pub verbosity: Verbosity,
 }
@@ -40,6 +46,14 @@ pub struct Args {
 impl Args {
     pub fn get_output(&self) -> Result<Box<dyn Write>> {
         match self.output {
+            Some(ref path) => {
+                Ok(std::fs::File::create(path).map(|f| Box::new(f) as Box<dyn Write>)?)
+            }
+            None => Ok(Box::new(std::io::stdout())),
+        }
+    }
+    pub fn get_confidence_output(&self) -> Result<Box<dyn Write>> {
+        match self.confidence_output {
             Some(ref path) => {
                 Ok(std::fs::File::create(path).map(|f| Box::new(f) as Box<dyn Write>)?)
             }

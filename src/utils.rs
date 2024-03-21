@@ -1,9 +1,12 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, io::Write};
 
 use itertools::Itertools;
 use logging_timer::time;
 
 use crate::parser::LookupTables;
+use anyhow::Result;
+
+pub const F64_OUTPUT_ACCURACY: u32 = 2;
 
 pub fn sequence_to_kmers(sequence: &[u8]) -> Vec<u16> {
     let mut k_mer: u16 = 0;
@@ -21,13 +24,13 @@ pub fn sequence_to_kmers(sequence: &[u8]) -> Vec<u16> {
 }
 
 #[time("debug")]
-pub fn accumulate_results(
-    lookup_tables: &LookupTables,
+pub fn accumulate_results<'a>(
+    lookup_tables: &'a LookupTables,
     hit_buffer: &[f64],
     cutoff: usize,
-    query_label: &str,
-) -> Vec<String> {
-    let mut result_lines: Vec<String> = Vec::new();
+) -> Option<Vec<(&'a String, Vec<f64>)>> {
+    let rounding_factor = 10_u32.pow(F64_OUTPUT_ACCURACY) as f64;
+    let mut result_lines: Option<Vec<(&'a String, Vec<f64>)>> = None;
     let mut phylum_values = vec![0.0; lookup_tables.level_hierarchy_maps[0].len()];
     let mut class_values = vec![0.0; lookup_tables.level_hierarchy_maps[1].len()];
     let mut order_values = vec![0.0; lookup_tables.level_hierarchy_maps[2].len()];
@@ -55,15 +58,30 @@ pub fn accumulate_results(
                                                         hit_buffer[*sequence];
                                                 });
                                             genus_values[*genus] += species_values[*species];
+                                            species_values[*species] = (species_values[*species]
+                                                * rounding_factor)
+                                                .round()
+                                                / rounding_factor;
                                         });
                                     family_values[*family] += genus_values[*genus];
+                                    genus_values[*genus] = (genus_values[*genus] * rounding_factor)
+                                        .round()
+                                        / rounding_factor;
                                 });
                             order_values[*order] += family_values[*family];
+                            family_values[*family] = (family_values[*family] * rounding_factor)
+                                .round()
+                                / rounding_factor;
                         });
                     class_values[*class] += order_values[*order];
+                    order_values[*order] =
+                        (order_values[*order] * rounding_factor).round() / rounding_factor;
                 });
             phylum_values[a] += class_values[*class];
+            class_values[*class] =
+                (class_values[*class] * rounding_factor).round() / rounding_factor;
         }
+        phylum_values[a] = (phylum_values[a] * rounding_factor).round() / rounding_factor;
     }
 
     let mut out_count = 0_usize;
@@ -123,21 +141,22 @@ pub fn accumulate_results(
                                 })
                         {
                             if species_values[*species] == 0.0 {
-                                break;
+                                return result_lines;
+                            } else {
+                                let label = &lookup_tables.labels
+                                    [lookup_tables.level_hierarchy_maps[5][*species][0]];
+                                let conf_values = vec![
+                                    phylum_values[a],
+                                    class_values[*b],
+                                    order_values[*c],
+                                    family_values[*d],
+                                    genus_values[*e],
+                                    species_values[*species],
+                                ];
+                                result_lines
+                                    .get_or_insert(Vec::new())
+                                    .push((label, conf_values));
                             }
-                            let label = &lookup_tables.labels
-                                [lookup_tables.level_hierarchy_maps[5][*species][0]];
-                            result_lines.push(format!(
-                                "{} {} {:.4}|{:.4}|{:.4}|{:.4}|{:.4}|{:.4}",
-                                query_label,
-                                label,
-                                phylum_values[a],
-                                class_values[*b],
-                                order_values[*c],
-                                family_values[*d],
-                                genus_values[*e],
-                                species_values[*species],
-                            ));
                             out_count += 1;
                             if out_count == cutoff {
                                 return result_lines;
@@ -149,6 +168,69 @@ pub fn accumulate_results(
         }
     }
     result_lines
+}
+
+pub fn output_results(
+    results: &[(&String, Option<Vec<(&String, Vec<f64>)>>)],
+    mut output: Box<dyn Write>,
+    mut confidence_output: Box<dyn Write>,
+    min_confidence: f64,
+) -> Result<()> {
+    let (output_lines, confidence_lines): (Vec<String>, Vec<String>) = results
+        .iter()
+        .map(|(query_label, confidence_vec)| match confidence_vec {
+            Some(c) => {
+                let normal_output = c
+                    .iter()
+                    .map(|(label, values)| {
+                        format!(
+                            "{}\t{}\t{}",
+                            query_label,
+                            label,
+                            values
+                                .iter()
+                                .map(|v| format!("{1:.0$}", F64_OUTPUT_ACCURACY as usize, v))
+                                .join("|")
+                        )
+                    })
+                    .join("\n");
+                let confidence_output = c
+                    .iter()
+                    .map(|(label, values)| {
+                        let (filter_taxon_info, filter_values): (Vec<&str>, Vec<String>) = values
+                            .iter()
+                            .zip_eq(label.split('|'))
+                            .filter(|(&v, _)| v >= min_confidence)
+                            .map(|(v, l)| (l, format!("{1:.0$}", F64_OUTPUT_ACCURACY as usize, v)))
+                            .unzip();
+                        if filter_taxon_info.is_empty() {
+                            format!("{}\tNA\tNA", query_label)
+                        } else {
+                            format!(
+                                "{}\t{}\t{}",
+                                query_label,
+                                filter_taxon_info.join("|"),
+                                filter_values.join("|")
+                            )
+                        }
+                    })
+                    .unique()
+                    .join("\n");
+                (normal_output, confidence_output)
+            }
+            None => (
+                format!("{}\tNA\tNA", query_label),
+                format!("{}\tNA\tNA", query_label),
+            ),
+        })
+        .unzip();
+    writeln!(output, "{}", output_lines.into_iter().join("\n"))?;
+    writeln!(
+        confidence_output,
+        "{}",
+        confidence_lines.into_iter().join("\n")
+    )?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -171,7 +253,7 @@ ATACGCTTTGCGT
 ATACGCTTTGCGT";
         let lookup_table = parse_reference_fasta_str(fasta_str).unwrap();
         let hit_buffer = [1.0 / 8.0, 2.0 / 8.0, 0.0, 2.0 / 8.0, 3.0 / 8.0];
-        accumulate_results(&lookup_table, &hit_buffer, 4, "SpeciesX");
+        accumulate_results(&lookup_table, &hit_buffer, 4);
         // assert_eq!(0, 1);
     }
 }
