@@ -253,7 +253,27 @@ ATACGCTTTGCGT
 ATACGCTTTGCGT";
         let lookup_table = parse_reference_fasta_str(fasta_str).unwrap();
         let hit_buffer = [1.0 / 8.0, 2.0 / 8.0, 0.0, 2.0 / 8.0, 3.0 / 8.0];
-        accumulate_results(&lookup_table, &hit_buffer, 4);
-        // assert_eq!(0, 1);
+        let results = accumulate_results(&lookup_table, &hit_buffer, 4);
+        assert_eq!(
+            results,
+            Some(vec![
+                (
+                    &"Phylum1|Class1|Order1|Family1|Genus1|Species2".to_string(),
+                    vec![0.63_f64, 0.38, 0.38, 0.38, 0.38, 0.25],
+                ),
+                (
+                    &"Phylum1|Class1|Order1|Family1|Genus1|Species1".into(),
+                    vec![0.63_f64, 0.38, 0.38, 0.38, 0.38, 0.13],
+                ),
+                (
+                    &"Phylum1|Class2|Order2|Family3|Genus3|Species6".into(),
+                    vec![0.63_f64, 0.25, 0.25, 0.25, 0.25, 0.25],
+                ),
+                (
+                    &"Phylum2|Class3|Order3|Family4|Genus4|Species5".into(),
+                    vec![0.38_f64, 0.38, 0.38, 0.38, 0.38, 0.38],
+                ),
+            ])
+        );
     }
 }

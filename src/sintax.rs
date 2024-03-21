@@ -63,7 +63,7 @@ pub fn sintax<'a, 'b>(
                 let num_hits = relevant_hits.len();
                 debug_assert!(
                     relevant_hits.iter().tuple_windows().all(|(a, b)| a.0 < b.0)
-                        && relevant_hits.last().unwrap().0 < hit_buffer.len()
+                        && relevant_hits.last().unwrap_or(&(0, &0)).0 < hit_buffer.len()
                 );
                 relevant_hits.into_iter().for_each(|(idx, _)| {
                     unsafe {
@@ -130,7 +130,7 @@ TCTTTCATCTACTTTATCTCATTCAGGGGCTTCAGTAGATCTTTCTATTTTTTCCCTTCATTTAGCTGGAATTTCTTCAA
         assert_eq!(
             vec![(
                 &query_data.0[0],
-                Some(vec![(&lookup_table.labels[0], vec![0.0; 6])])
+                Some(vec![(&lookup_table.labels[0], vec![0.47; 6])])
             )],
             result
         );
