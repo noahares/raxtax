@@ -27,6 +27,7 @@ pub fn sequence_to_kmers(sequence: &[u8]) -> Vec<u16> {
 pub fn accumulate_results<'a>(
     lookup_tables: &'a LookupTables,
     hit_buffer: &[f64],
+    num_iterations: usize,
     cutoff: usize,
 ) -> Option<Vec<(&'a String, Vec<f64>)>> {
     let rounding_factor = 10_u32.pow(F64_OUTPUT_ACCURACY) as f64;
@@ -54,8 +55,9 @@ pub fn accumulate_results<'a>(
                                             lookup_tables.level_hierarchy_maps[5][*species]
                                                 .iter()
                                                 .for_each(|sequence| {
-                                                    species_values[*species] +=
-                                                        hit_buffer[*sequence];
+                                                    species_values[*species] += hit_buffer
+                                                        [*sequence]
+                                                        / num_iterations as f64;
                                                 });
                                             genus_values[*genus] += species_values[*species];
                                             species_values[*species] = (species_values[*species]

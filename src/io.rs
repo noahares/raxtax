@@ -27,11 +27,19 @@ pub struct Args {
     /// Number of output species per query
     #[arg(short = 'm', long, default_value_t = 5)]
     pub max_target_seqs: usize,
+    /// The MSE of none-zero values in the hit buffer for early stopping
+    /// (This should be around 10e-5 to 10e-7 depending on the required accuracy)
+    #[arg(short = 'e', long, verbatim_doc_comment)]
+    pub early_stop_mse: Option<f64>,
+    /// Fraction of iterations to run before checking the MSE
+    /// Has no effect if --early-stop-mse is not provided
+    #[arg(short, long, default_value_t = 0.1, verbatim_doc_comment)]
+    pub min_iterations: f64,
     /// Number of threads
     #[arg(short, long, default_value_t = 0)]
     pub threads: usize,
     /// Seed
-    #[arg(long, default_value_t = 42)]
+    #[arg(short, long, default_value_t = 42)]
     pub seed: u64,
     /// Output path
     #[arg(short, long)]
