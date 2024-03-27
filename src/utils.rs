@@ -217,8 +217,16 @@ pub fn output_results(
                         }
                     })
                     .unique()
-                    .join("\n");
-                (normal_output, confidence_output)
+                    .collect_vec();
+                // .join("\n");
+                let mut confidence_output_filtered: Vec<String> =
+                    vec![confidence_output[0].clone()];
+                for i in 1..confidence_output.len() {
+                    if !confidence_output[i - 1].starts_with(confidence_output[i].as_str()) {
+                        confidence_output_filtered.push(confidence_output[i].clone());
+                    }
+                }
+                (normal_output, confidence_output_filtered.join("\n"))
             }
             None => (
                 format!("{}\tNA\tNA", query_label),
@@ -255,7 +263,7 @@ ATACGCTTTGCGT
 ATACGCTTTGCGT";
         let lookup_table = parse_reference_fasta_str(fasta_str).unwrap();
         let hit_buffer = [1.0 / 8.0, 2.0 / 8.0, 0.0, 2.0 / 8.0, 3.0 / 8.0];
-        let results = accumulate_results(&lookup_table, &hit_buffer, 4);
+        let results = accumulate_results(&lookup_table, &hit_buffer, 8, 4);
         assert_eq!(
             results,
             Some(vec![
