@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use clap::Parser;
 use clap_verbosity_flag::Verbosity;
 use std::{io::Write, path::PathBuf};
@@ -47,25 +47,32 @@ pub struct Args {
     /// confidence output path
     #[arg(short = 'u', long)]
     pub confidence_output: Option<PathBuf>,
+    /// Force override of existing output files
+    #[arg(long)]
+    pub redo: bool,
     #[command(flatten)]
     pub verbosity: Verbosity,
 }
 
 impl Args {
     pub fn get_output(&self) -> Result<Box<dyn Write>> {
-        match self.output {
-            Some(ref path) => {
-                Ok(std::fs::File::create(path).map(|f| Box::new(f) as Box<dyn Write>)?)
-            }
-            None => Ok(Box::new(std::io::stdout())),
+        let path = self
+            .output
+            .clone()
+            .unwrap_or(self.query_file.with_extension("sintax.out"));
+        if path.is_file() && !self.redo {
+            bail!("Output file {} already exists! Please specify another file with -o <PATH> or run with --redo to force overriding existing files!", path.display());
         }
+        Ok(std::fs::File::create(path).map(|f| Box::new(f) as Box<dyn Write>)?)
     }
     pub fn get_confidence_output(&self) -> Result<Box<dyn Write>> {
-        match self.confidence_output {
-            Some(ref path) => {
-                Ok(std::fs::File::create(path).map(|f| Box::new(f) as Box<dyn Write>)?)
-            }
-            None => Ok(Box::new(std::io::stdout())),
+        let path = self.confidence_output.clone().unwrap_or(
+            self.query_file
+                .with_extension(format!("sintax.conf{}.out", self.min_confidence)),
+        );
+        if path.is_file() && !self.redo {
+            bail!("Output file {} already exists! Please specify another file with -u <PATH> or run with --redo to force overriding existing files!", path.display());
         }
+        Ok(std::fs::File::create(path).map(|f| Box::new(f) as Box<dyn Write>)?)
     }
 }

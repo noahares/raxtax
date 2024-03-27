@@ -12,6 +12,8 @@ fn main() -> Result<()> {
     if args.num_k_mers >= 255 {
         bail!("Using more than 255 k-mers will break this program because of buffer sizes!\nPlease choose fewer k-mers");
     }
+    let output = args.get_output()?;
+    let confidence_output = args.get_confidence_output()?;
     rayon::ThreadPoolBuilder::new()
         .num_threads(args.threads)
         .build_global()
@@ -22,8 +24,6 @@ fn main() -> Result<()> {
     let _total_tmr = timer!(Level::Info; "Total Runtime");
     let lookup_table = parser::parse_reference_fasta_file(&args.database_path)?;
     let query_data = parser::parse_query_fasta_file(&args.query_file)?;
-    let output = args.get_output()?;
-    let confidence_output = args.get_confidence_output()?;
     let result = sintax(&query_data, &lookup_table, &args);
     utils::output_results(&result, output, confidence_output, args.min_confidence)?;
 
