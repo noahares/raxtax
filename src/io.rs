@@ -33,7 +33,7 @@ pub struct Args {
     pub early_stop_mse: Option<f64>,
     /// Fraction of iterations to run before checking the MSE
     /// Has no effect if --early-stop-mse is not provided
-    #[arg(short, long, default_value_t = 0.1, verbatim_doc_comment)]
+    #[arg(short = 'p', long, default_value_t = 0.1, verbatim_doc_comment)]
     pub min_iterations: f64,
     /// Number of threads
     #[arg(short, long, default_value_t = 0)]
