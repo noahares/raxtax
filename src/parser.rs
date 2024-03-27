@@ -15,7 +15,7 @@ use std::{
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct LookupTables {
     pub labels: Vec<String>,
-    pub sequences: HashMap<Vec<u8>, usize>,
+    pub sequences: HashMap<Vec<u8>, Vec<usize>>,
     pub level_hierarchy_maps: Vec<Vec<Vec<usize>>>,
     pub k_mer_map: Vec<Vec<usize>>,
 }
@@ -91,7 +91,7 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
             .collect::<Result<Vec<()>>>()?;
         sequences.push(current_sequence);
         let mut ordered_labels: Vec<String> = Vec::new();
-        let mut sequence_map: HashMap<Vec<u8>, usize> = HashMap::new();
+        let mut sequence_map: HashMap<Vec<u8>, Vec<usize>> = HashMap::new();
         labels
             .iter()
             .zip_eq(sequences)
@@ -114,7 +114,7 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
                         level_sets[idx].insert(name.to_string());
                     });
                 ordered_labels.push(l.to_string());
-                sequence_map.insert(s.clone(), idx);
+                sequence_map.entry(s.clone()).or_default().push(idx);
                 let mut k_mer: u16 = 0;
                 s[0..8]
                     .iter()

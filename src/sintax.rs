@@ -32,12 +32,18 @@ pub fn sintax<'a, 'b>(
         )
         .with_message("Running Queries...")
         .map(|(i, (query_label, query_sequence))| {
-            if let Some(&label_idx) = lookup_table.sequences.get(query_sequence) {
+            if let Some(label_idxs) = lookup_table.sequences.get(query_sequence) {
                 debug!("Exact sequence match for query {query_label}!");
                 return (
                     i,
                     query_label,
-                    Some(vec![(&lookup_table.labels[label_idx], vec![1.0; 6])]),
+                    Some(
+                        label_idxs
+                            .iter()
+                            .map(|&idx| (&lookup_table.labels[idx], vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0 / label_idxs.len() as f64]))
+                            .take(args.max_target_seqs)
+                            .collect_vec(),
+                    ),
                 );
             }
             // WARN: if number of possible hits can get above 255, this breaks! <noahares>
