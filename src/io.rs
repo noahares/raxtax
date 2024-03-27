@@ -1,7 +1,29 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Result, Context};
 use clap::Parser;
 use clap_verbosity_flag::Verbosity;
 use std::{io::Write, path::PathBuf};
+
+fn normalized_ratio(s: &str) -> Result<f64> {
+    let ratio: f64 = s
+        .parse()
+        .with_context(|| format!("`{s}` isn't a valid fraction"))?;
+    if (0.0..=1.0).contains(&ratio) {
+        Ok(ratio)
+    } else {
+        bail!("Fraction is not in range {:.2}-{:.2}", 0.0, 1.0)
+    }
+}
+
+fn positive_usize(s: &str) -> Result<usize> {
+    let value: usize = s
+        .parse()
+        .with_context(|| format!("`{s}` isn't a valid usize"))?;
+    if value > 0 {
+        Ok(value)
+    } else {
+        bail!("Value should be positive")
+    }
+}
 
 #[derive(Parser)]
 #[command(author, version, about)]
@@ -13,29 +35,30 @@ pub struct Args {
     #[arg(short = 'i', long)]
     pub query_file: PathBuf,
     /// Number of rounds per query
-    #[arg(short, long, default_value_t = 1000)]
+    #[arg(short, long, default_value_t = 1000, value_parser = positive_usize)]
     pub num_iterations: usize,
     /// Number of 8-mers
-    #[arg(short = 'k', long, default_value_t = 32)]
+    #[arg(short = 'k', long, default_value_t = 32, value_parser = positive_usize)]
     pub num_k_mers: usize,
     /// 8-mer hit-threshold
-    #[arg(short = 'f', long, default_value_t = 1.0 / 3.0)]
+    #[arg(short = 'f', long, default_value_t = 1.0 / 3.0, value_parser = normalized_ratio)]
     pub min_hit_fraction: f64,
     /// Confidence threshold
-    #[arg(short = 'c', long, default_value_t = 0.8)]
+    #[arg(short = 'c', long, default_value_t = 0.8, value_parser = normalized_ratio)]
     pub min_confidence: f64,
     /// Number of output species per query
-    #[arg(short = 'm', long, default_value_t = 5)]
+    #[arg(short = 'm', long, default_value_t = 5, value_parser = positive_usize)]
     pub max_target_seqs: usize,
     /// The MSE of none-zero values in the hit buffer for early stopping
     /// (This should be around 1e-6 to 1e-8 depending on the required accuracy)
-    #[arg(short = 'e', long, default_value_t = 1e-7, verbatim_doc_comment)]
+    #[arg(short = 'e', long, default_value_t = 1e-7, value_parser = normalized_ratio, verbatim_doc_comment)]
     pub early_stop_mse: f64,
     /// Fraction of iterations to run before checking the MSE
-    #[arg(short = 'p', long, default_value_t = 0.1, verbatim_doc_comment)]
+    #[arg(short = 'p', long, default_value_t = 0.1, value_parser = normalized_ratio, verbatim_doc_comment)]
     pub min_iterations: f64,
     /// Number of threads
-    #[arg(short, long, default_value_t = 0)]
+    /// If 0, uses all available threads
+    #[arg(short, long, default_value_t = 0, verbatim_doc_comment)]
     pub threads: usize,
     /// Seed
     #[arg(short, long, default_value_t = 42)]
