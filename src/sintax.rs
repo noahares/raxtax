@@ -46,9 +46,7 @@ pub fn sintax<'a, 'b>(
             let mut rng = Xoroshiro128PlusPlus::seed_from_u64(args.seed);
             let _tmr = timer!(Level::Debug; "Query Time");
             let k_mers = utils::sequence_to_kmers(query_sequence);
-            let mut last_hit_buffer: Option<Vec<f64>> = args
-                .early_stop_mse
-                .map(|_| vec![0.0; lookup_table.labels.len()]);
+            let mut last_hit_buffer: Vec<f64> = vec![0.0; lookup_table.labels.len()];
             let mut num_completed_iterations = args.num_iterations;
             for j in 0..args.num_iterations {
                 buffer.fill(0);
@@ -74,23 +72,20 @@ pub fn sintax<'a, 'b>(
                 relevant_hits.into_iter().for_each(|(idx, _)| {
                     unsafe { *hit_buffer.get_unchecked_mut(idx) += 1.0 / num_hits as f64 };
                 });
-                if let Some(max_mse) = args.early_stop_mse {
-                    if j >= min_iterations {
-                        let mse = last_hit_buffer
-                            .unwrap()
-                            .iter()
-                            .zip_eq(hit_buffer.iter())
-                            .fold(0.0, |acc, (&a, b)| {
-                                acc + (a / j as f64 - b / (j + 1) as f64).powi(2)
-                            })
-                            / hit_buffer.iter().filter(|&&v| v > 0.0).count() as f64;
-                        if mse < max_mse {
-                            num_completed_iterations = j + 1;
-                            debug!("Stopped after {num_completed_iterations} iterations");
-                            break;
-                        }
+                if j >= min_iterations {
+                    let mse = last_hit_buffer
+                        .iter()
+                        .zip_eq(hit_buffer.iter())
+                        .fold(0.0, |acc, (&a, b)| {
+                            acc + (a / j as f64 - b / (j + 1) as f64).powi(2)
+                        })
+                        / hit_buffer.iter().filter(|&&v| v > 0.0).count() as f64;
+                    if mse < args.early_stop_mse {
+                        num_completed_iterations = j + 1;
+                        debug!("Stopped after {num_completed_iterations} iterations");
+                        break;
                     }
-                    last_hit_buffer = Some(hit_buffer.clone());
+                    last_hit_buffer = hit_buffer.clone();
                 }
             }
             (
