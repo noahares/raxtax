@@ -1,9 +1,10 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use indicatif::{ProgressIterator, ProgressStyle};
 use itertools::Itertools;
 use log::{debug, Level};
 use logging_timer::{time, timer};
 use rayon::prelude::*;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
@@ -34,6 +35,7 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
     // Level 5: Species
     let mut level_sets: [HashSet<String>; 6] = Default::default();
     let mut k_mer_map: Vec<Vec<usize>> = vec![Vec::new(); 2 << 15];
+    let regex = Regex::new(r".*tax=p:(.*?),c:(.*?),o:(.*?),f:(.*?),g:(.*?),s:(.*?);")?;
     let (labels, sequences) = {
         let _tmr = timer!(Level::Info; "Read file and create k-mer mapping");
         let lines: Vec<String> = fasta_str
@@ -59,14 +61,16 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
                 .progress_chars("##-"),
             )
             .with_message("Parsing Reference...")
-            .for_each(|line| {
+            .map(|line| -> Result<()> {
                 if let Some(label) = line.strip_prefix('>') {
-                    labels.push(
-                        label.rsplitn(7, '|').collect_vec()[0..6]
-                            .iter()
-                            .rev()
-                            .join("|"),
-                    );
+                    let (_, pieces): (&str, [&str; 6]) = regex
+                        .captures(label)
+                        .map(|caps| caps.extract())
+                        .context(format!(
+                            "Unexpected taxonomical annotation detected in {}",
+                            label
+                        ))?;
+                    labels.push(pieces.join("|"));
                     if !current_sequence.is_empty() {
                         sequences.push(current_sequence.clone());
                         current_sequence = Vec::new();
@@ -82,7 +86,9 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
                         }
                     }))
                 }
-            });
+                Ok(())
+            })
+            .collect::<Result<Vec<()>>>()?;
         sequences.push(current_sequence);
         let mut ordered_labels: Vec<String> = Vec::new();
         let mut sequence_map: HashMap<Vec<u8>, usize> = HashMap::new();
