@@ -1,6 +1,6 @@
 use anyhow::{bail, Result, Context};
 use clap::Parser;
-use clap_verbosity_flag::Verbosity;
+use clap_verbosity_flag::{Verbosity, WarnLevel};
 use std::{io::Write, path::PathBuf};
 
 fn normalized_ratio(s: &str) -> Result<f64> {
@@ -77,7 +77,7 @@ pub struct Args {
     #[arg(long)]
     pub redo: bool,
     #[command(flatten)]
-    pub verbosity: Verbosity,
+    pub verbosity: Verbosity<WarnLevel>,
 }
 
 impl Args {

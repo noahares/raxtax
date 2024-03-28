@@ -14,6 +14,8 @@ fn main() {
     let args = io::Args::parse();
     env_logger::Builder::new()
         .filter_level(args.verbosity.log_level_filter())
+        .format_timestamp(None)
+        .format_target(false)
         .init();
     if args.num_k_mers >= 255 {
         error!("Using more than 255 k-mers will break this program because of buffer sizes! Please choose fewer k-mers");
