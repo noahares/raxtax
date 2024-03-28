@@ -34,7 +34,7 @@ pub struct Args {
     /// Path to the query file
     #[arg(short = 'i', long)]
     pub query_file: PathBuf,
-    /// Number of rounds per query
+    /// Number of iterations per query
     #[arg(short, long, default_value_t = 1000, value_parser = positive_usize)]
     pub num_iterations: usize,
     /// Number of 8-mers

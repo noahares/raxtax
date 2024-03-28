@@ -143,22 +143,21 @@ pub fn accumulate_results<'a>(
                                 })
                         {
                             if species_values[*species] == 0.0 {
-                                return result_lines;
-                            } else {
-                                let label = &lookup_tables.labels
-                                    [lookup_tables.level_hierarchy_maps[5][*species][0]];
-                                let conf_values = vec![
-                                    phylum_values[a],
-                                    class_values[*b],
-                                    order_values[*c],
-                                    family_values[*d],
-                                    genus_values[*e],
-                                    species_values[*species],
-                                ];
-                                result_lines
-                                    .get_or_insert(Vec::new())
-                                    .push((label, conf_values));
+                                break;
                             }
+                            let label = &lookup_tables.labels
+                                [lookup_tables.level_hierarchy_maps[5][*species][0]];
+                            let conf_values = vec![
+                                phylum_values[a],
+                                class_values[*b],
+                                order_values[*c],
+                                family_values[*d],
+                                genus_values[*e],
+                                species_values[*species],
+                            ];
+                            result_lines
+                                .get_or_insert(Vec::new())
+                                .push((label, conf_values));
                             out_count += 1;
                             if out_count == cutoff {
                                 return result_lines;
