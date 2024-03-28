@@ -49,7 +49,7 @@ pub struct Args {
     /// Number of output species per query
     #[arg(short = 'm', long, default_value_t = 5, value_parser = positive_usize)]
     pub max_target_seqs: usize,
-    /// The MSE of none-zero values in the hit buffer for early stopping
+    /// The MSE threshold of none-zero values in the hit buffer for early stopping
     /// (This should be around 1e-6 to 1e-8 depending on the required accuracy)
     #[arg(short = 'e', long, default_value_t = 1e-7, value_parser = normalized_ratio, verbatim_doc_comment)]
     pub early_stop_mse: f64,
@@ -69,6 +69,10 @@ pub struct Args {
     /// confidence output path
     #[arg(short = 'u', long)]
     pub confidence_output: Option<PathBuf>,
+    /// Disable early stopping checks
+    /// Recommended when doing few iterations with low stopping threshold to boost performance
+    #[arg(long, verbatim_doc_comment)]
+    pub no_early_stopping: bool,
     /// Force override of existing output files
     #[arg(long)]
     pub redo: bool,
