@@ -1,5 +1,5 @@
 [package]
-name = "make-sintax-great-again"
+name = "sintax-ng"
 version = "0.1.0"
 authors = ["Noah Wahl <noah.ares99@gmail.com>"]
 edition = "2021"

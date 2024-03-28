@@ -4,10 +4,10 @@ use clap::Parser;
 use log::Level;
 use log::error;
 use logging_timer::timer;
-use make_sintax_great_again::io;
-use make_sintax_great_again::parser;
-use make_sintax_great_again::sintax::sintax;
-use make_sintax_great_again::utils;
+use sintax_ng::io;
+use sintax_ng::parser;
+use sintax_ng::sintax::sintax;
+use sintax_ng::utils;
 
 fn main() {
     let args = io::Args::parse();
