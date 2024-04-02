@@ -40,7 +40,12 @@ pub fn sintax<'a, 'b>(
                     Some(
                         label_idxs
                             .iter()
-                            .map(|&idx| (&lookup_table.labels[idx], vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0 / label_idxs.len() as f64]))
+                            .map(|&idx| {
+                                (
+                                    &lookup_table.labels[idx],
+                                    vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0 / label_idxs.len() as f64],
+                                )
+                            })
                             .take(args.max_target_seqs)
                             .collect_vec(),
                     ),
@@ -48,13 +53,13 @@ pub fn sintax<'a, 'b>(
             }
             // WARN: if number of possible hits can get above 255, this breaks! <noahares>
             let mut buffer: Vec<u8> = vec![0; lookup_table.labels.len()];
-            let mut hit_buffer: Vec<f64> = vec![0.0; lookup_table.labels.len()];
+            let mut hit_buffer: Vec<f64> = vec![0.0; lookup_table.level_hierarchy_maps[5].len()];
             let mut rng = Xoroshiro128PlusPlus::seed_from_u64(args.seed);
             let _tmr = timer!(Level::Debug; "Query Time");
             let k_mers = utils::sequence_to_kmers(query_sequence);
             let mut last_hit_buffer: Option<Vec<f64>> = match args.no_early_stopping {
-                true => Some(vec![0.0; lookup_table.labels.len()]),
-                false => None,
+                true => None,
+                false => Some(vec![0.0; hit_buffer.len()]),
             };
             let mut num_completed_iterations = args.num_iterations;
             for j in 0..args.num_iterations {
@@ -79,9 +84,13 @@ pub fn sintax<'a, 'b>(
                         && relevant_hits.last().unwrap_or(&(0, &0)).0 < hit_buffer.len()
                 );
                 relevant_hits.into_iter().for_each(|(idx, _)| {
-                    unsafe { *hit_buffer.get_unchecked_mut(idx) += 1.0 / num_hits as f64 };
+                    unsafe {
+                        *hit_buffer.get_unchecked_mut(
+                            *lookup_table.sequence_species_map.get_unchecked(idx),
+                        ) += 1.0 / num_hits as f64
+                    };
                 });
-                if !args.no_early_stopping && j >= min_iterations {
+                if !args.no_early_stopping && j + 1 >= min_iterations {
                     let mse = last_hit_buffer
                         .unwrap()
                         .iter()
@@ -92,21 +101,19 @@ pub fn sintax<'a, 'b>(
                         / hit_buffer.iter().filter(|&&v| v > 0.0).count() as f64;
                     if mse < args.early_stop_mse {
                         num_completed_iterations = j + 1;
-                        debug!("Stopped after {num_completed_iterations} iterations");
+                        debug!("{query_label} Stopped after {num_completed_iterations} iterations");
                         break;
                     }
                     last_hit_buffer = Some(hit_buffer.clone());
                 }
             }
+            hit_buffer
+                .iter_mut()
+                .for_each(|v| *v /= num_completed_iterations as f64);
             (
                 i,
                 query_label,
-                utils::accumulate_results(
-                    lookup_table,
-                    &hit_buffer,
-                    num_completed_iterations,
-                    args.max_target_seqs,
-                ),
+                utils::accumulate_results(lookup_table, &hit_buffer, args.max_target_seqs),
             )
         })
         .collect::<Vec<(usize, &String, Option<Vec<(&String, Vec<f64>)>>)>>()

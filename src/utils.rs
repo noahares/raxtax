@@ -20,14 +20,13 @@ pub fn sequence_to_kmers(sequence: &[u8]) -> Vec<u16> {
         k_mer = (k_mer << 2) | *c as u16;
         k_mers.insert(k_mer);
     });
-    k_mers.into_iter().sorted().collect_vec()
+    k_mers.into_iter().unique().sorted().collect_vec()
 }
 
 #[time("debug")]
 pub fn accumulate_results<'a>(
     lookup_tables: &'a LookupTables,
     hit_buffer: &[f64],
-    num_iterations: usize,
     cutoff: usize,
 ) -> Option<Vec<(&'a String, Vec<f64>)>> {
     let rounding_factor = 10_u32.pow(F64_OUTPUT_ACCURACY) as f64;
@@ -52,18 +51,10 @@ pub fn accumulate_results<'a>(
                                     lookup_tables.level_hierarchy_maps[4][*genus]
                                         .iter()
                                         .for_each(|species| {
-                                            lookup_tables.level_hierarchy_maps[5][*species]
-                                                .iter()
-                                                .for_each(|sequence| {
-                                                    species_values[*species] += hit_buffer
-                                                        [*sequence]
-                                                        / num_iterations as f64;
-                                                });
-                                            genus_values[*genus] += species_values[*species];
-                                            species_values[*species] = (species_values[*species]
-                                                * rounding_factor)
-                                                .round()
-                                                / rounding_factor;
+                                            genus_values[*genus] += hit_buffer[*species];
+                                            species_values[*species] =
+                                                (hit_buffer[*species] * rounding_factor).round()
+                                                    / rounding_factor;
                                         });
                                     family_values[*family] += genus_values[*genus];
                                     genus_values[*genus] = (genus_values[*genus] * rounding_factor)
@@ -262,7 +253,7 @@ ATACGCTTTGCGT
 ATACGCTTTGCGT";
         let lookup_table = parse_reference_fasta_str(fasta_str).unwrap();
         let hit_buffer = [1.0 / 8.0, 2.0 / 8.0, 0.0, 2.0 / 8.0, 3.0 / 8.0];
-        let results = accumulate_results(&lookup_table, &hit_buffer, 8, 4);
+        let results = accumulate_results(&lookup_table, &hit_buffer, 4);
         assert_eq!(
             results,
             Some(vec![

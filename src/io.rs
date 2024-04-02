@@ -1,4 +1,4 @@
-use anyhow::{bail, Result, Context};
+use anyhow::{bail, Context, Result};
 use clap::Parser;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use std::{io::Write, path::PathBuf};

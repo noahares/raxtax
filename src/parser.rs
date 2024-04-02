@@ -18,6 +18,7 @@ pub struct LookupTables {
     pub sequences: HashMap<Vec<u8>, Vec<usize>>,
     pub level_hierarchy_maps: Vec<Vec<Vec<usize>>>,
     pub k_mer_map: Vec<Vec<usize>>,
+    pub sequence_species_map: Vec<usize>,
 }
 
 pub fn parse_reference_fasta_file(sequence_path: &PathBuf) -> Result<LookupTables> {
@@ -179,6 +180,13 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
         level_hierarchy_maps[5][species_idx].insert(i);
     });
 
+    let mut sequence_species_map = vec![0; labels.len()];
+    for (species_id, sequences) in level_hierarchy_maps[5].iter().enumerate() {
+        for sequence_id in sequences {
+            sequence_species_map[*sequence_id] = species_id;
+        }
+    }
+
     Ok(LookupTables {
         labels,
         sequences,
@@ -195,6 +203,7 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
             .into_par_iter()
             .map(|seqs| seqs.into_iter().unique().sorted().collect_vec())
             .collect(),
+        sequence_species_map,
     })
 }
 
