@@ -16,6 +16,7 @@ pub fn sintax<'a, 'b>(
     args: &Args,
 ) -> Vec<(&'b String, Option<Vec<(&'a String, Vec<f64>)>>)> {
     let threshold = f64::ceil(args.num_k_mers as f64 * args.min_hit_fraction) as u8;
+    let mse_discard_treshold = 1.0 / 10_u32.pow(utils::F64_OUTPUT_ACCURACY) as f64;
     let min_iterations: usize =
         (args.min_iterations * args.num_iterations as f64).max(1.0) as usize;
     let (query_labels, query_sequences) = query_data;
@@ -95,10 +96,14 @@ pub fn sintax<'a, 'b>(
                         .unwrap()
                         .iter()
                         .zip_eq(hit_buffer.iter())
+                        .filter(|(_, c)| **c / (j + 1) as f64 >= mse_discard_treshold)
                         .fold(0.0, |acc, (&a, b)| {
                             acc + (a / j as f64 - b / (j + 1) as f64).powi(2)
                         })
-                        / hit_buffer.iter().filter(|&&v| v > 0.0).count() as f64;
+                        / hit_buffer
+                            .iter()
+                            .filter(|&&v| v / (j + 1) as f64 >= mse_discard_treshold)
+                            .count() as f64;
                     if mse < args.early_stop_mse {
                         num_completed_iterations = j + 1;
                         debug!("{query_label} Stopped after {num_completed_iterations} iterations");
