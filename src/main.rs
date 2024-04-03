@@ -12,7 +12,15 @@ use sintax_ng::utils;
 
 fn main() {
     let args = io::Args::parse();
+    let log_output = match args.get_log_output() {
+        Ok(output) => output,
+        Err(e) => {
+            eprintln!("[ERROR] {}", e);
+            exit(exitcode::CANTCREAT);
+        },
+    };
     env_logger::Builder::new()
+        .target(env_logger::Target::Pipe(log_output))
         .filter_level(args.verbosity.log_level_filter())
         .format_timestamp(None)
         .format_target(false)

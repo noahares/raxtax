@@ -112,6 +112,9 @@ pub fn sintax<'a, 'b>(
                     last_hit_buffer = Some(hit_buffer.clone());
                 }
             }
+            if num_completed_iterations == args.num_iterations {
+                debug!("{query_label} Stopped after {} iterations", args.num_iterations);
+            }
             hit_buffer
                 .iter_mut()
                 .for_each(|v| *v /= num_completed_iterations as f64);

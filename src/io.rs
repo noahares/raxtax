@@ -69,6 +69,9 @@ pub struct Args {
     /// confidence output path
     #[arg(short = 'u', long)]
     pub confidence_output: Option<PathBuf>,
+    /// log output path
+    #[arg(short = 'l', long)]
+    pub log_output: Option<PathBuf>,
     /// Disable early stopping checks
     /// Recommended when doing few iterations with low stopping threshold to boost performance
     #[arg(long, verbatim_doc_comment)]
@@ -100,5 +103,15 @@ impl Args {
             bail!("Output file {} already exists! Please specify another file with -u <PATH> or run with --redo to force overriding existing files!", path.display());
         }
         Ok(std::fs::File::create(path).map(|f| Box::new(f) as Box<dyn Write>)?)
+    }
+    pub fn get_log_output(&self) -> Result<Box<dyn Write + Send>> {
+        let path = self
+            .log_output
+            .clone()
+            .unwrap_or(self.query_file.with_extension("sintax.log"));
+        if path.is_file() && !self.redo {
+            bail!("Output file {} already exists! Please specify another file with -l <PATH> or run with --redo to force overriding existing files!", path.display());
+        }
+        Ok(std::fs::File::create(path).map(|f| Box::new(f) as Box<dyn Write + Send>)?)
     }
 }
