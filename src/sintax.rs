@@ -103,10 +103,10 @@ pub fn sintax<'a, 'b>(
                         .fold(0.0, |acc, (&a, b)| {
                             acc + (a / j as f64 - b / (j + 1) as f64).powi(2)
                         })
-                        / hit_buffer
+                        / (hit_buffer
                             .iter()
                             .filter(|&&v| v / (j + 1) as f64 >= mse_discard_treshold)
-                            .count() as f64;
+                            .count() as f64).max(1.0);
                     if mse < args.early_stop_mse {
                         num_completed_iterations = j + 1;
                         debug!("{query_label} Stopped after {num_completed_iterations} iterations");
