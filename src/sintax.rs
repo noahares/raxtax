@@ -1,8 +1,10 @@
+use std::sync::atomic::AtomicUsize;
+
 use crate::utils;
 use crate::{io::Args, parser::LookupTables};
 use indicatif::{ParallelProgressIterator, ProgressStyle};
 use itertools::Itertools;
-use log::{debug, Level};
+use log::{debug, info, Level};
 use logging_timer::{time, timer};
 use rand::seq::SliceRandom;
 use rand_xoshiro::rand_core::SeedableRng;
@@ -15,12 +17,13 @@ pub fn sintax<'a, 'b>(
     lookup_table: &'a LookupTables,
     args: &Args,
 ) -> Vec<(&'b String, Option<Vec<(&'a String, Vec<f64>)>>)> {
+    let num_non_convergence_queries = AtomicUsize::new(0);
     let threshold = f64::ceil(args.num_k_mers as f64 * args.min_hit_fraction) as u8;
     let mse_discard_treshold = 1.0 / 10_u32.pow(utils::F64_OUTPUT_ACCURACY) as f64;
     let min_iterations: usize =
         (args.min_iterations * args.num_iterations as f64).max(1.0) as usize;
     let (query_labels, query_sequences) = query_data;
-    query_labels
+    let result = query_labels
         .par_iter()
         .zip_eq(query_sequences.par_iter())
         .enumerate()
@@ -113,7 +116,11 @@ pub fn sintax<'a, 'b>(
                 }
             }
             if num_completed_iterations == args.num_iterations {
-                debug!("{query_label} Stopped after {} iterations", args.num_iterations);
+                debug!(
+                    "{query_label} Stopped after {} iterations",
+                    args.num_iterations
+                );
+                num_non_convergence_queries.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             }
             hit_buffer
                 .iter_mut()
@@ -128,7 +135,14 @@ pub fn sintax<'a, 'b>(
         .into_iter()
         .sorted_by_key(|(i, _, _)| *i)
         .map(|(_, q, v)| (q, v))
-        .collect_vec()
+        .collect_vec();
+    info!(
+        "{} out of {} queries did not meet the early stopping criterion within {} iterations.",
+        num_non_convergence_queries.load(std::sync::atomic::Ordering::Relaxed),
+        query_labels.len(),
+        args.num_iterations
+    );
+    result
 }
 
 #[cfg(test)]
