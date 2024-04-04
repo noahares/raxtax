@@ -260,7 +260,12 @@ pub fn output_results(
                 let mut confidence_output_filtered: Vec<String> =
                     vec![confidence_output[0].clone()];
                 for i in 1..confidence_output.len() {
-                    if !confidence_output[i - 1].starts_with(confidence_output[i].as_str()) {
+                    if !confidence_output[i - 1]
+                        .split('\t')
+                        .nth(1)
+                        .unwrap()
+                        .starts_with(confidence_output[i].split('\t').nth(1).unwrap())
+                    {
                         confidence_output_filtered.push(confidence_output[i].clone());
                     }
                 }
