@@ -1,11 +1,16 @@
-use std::{collections::HashSet, io::{Write, Read, BufReader}, fs::File, path::PathBuf};
+use std::{
+    collections::HashSet,
+    fs::File,
+    io::{BufReader, Read, Write},
+    path::PathBuf,
+};
 
 use flate2::read::GzDecoder;
 use itertools::Itertools;
 use logging_timer::time;
 
 use crate::parser::LookupTables;
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 
 pub const F64_OUTPUT_ACCURACY: u32 = 2;
 
@@ -24,13 +29,35 @@ pub fn sequence_to_kmers(sequence: &[u8]) -> Vec<u16> {
     k_mers.into_iter().unique().sorted().collect_vec()
 }
 
+pub fn check_convergence(
+    hit_buffer: &[f64],
+    last_hit_buffer: &[f64],
+    iteration: usize,
+    min_contribution: f64,
+    early_stop_mse: f64,
+) -> bool {
+    let relevant_values = hit_buffer
+        .iter()
+        .zip_eq(last_hit_buffer.iter())
+        .filter(|(&v, _)| v / (iteration + 1) as f64 >= min_contribution)
+        .collect_vec();
+    let num_values = relevant_values.len();
+    if num_values == 0 {
+        return true;
+    }
+    let mse = relevant_values.into_iter().fold(0.0, |acc, (&c, &l)| {
+        acc + ((c / (iteration + 1) as f64) - (l / iteration as f64)).powi(2)
+    }) / num_values as f64;
+    mse < early_stop_mse
+}
+
 pub fn get_reader(path: &PathBuf) -> Result<Box<dyn Read>> {
     let file_type = match path.extension() {
         Some(ext) => match ext.to_str() {
             Some(ext_str) => ext_str.to_ascii_lowercase(),
             None => bail!("Extension could not be parsed!"),
         },
-        None => "fasta".to_string()
+        None => "fasta".to_string(),
     };
 
     let file = File::open(path)?;
@@ -40,7 +67,7 @@ pub fn get_reader(path: &PathBuf) -> Result<Box<dyn Read>> {
             let reader = Box::new(GzDecoder::new(file));
             Ok(Box::new(BufReader::new(reader)))
         }
-        _ => Ok(Box::new(BufReader::new(file)))
+        _ => Ok(Box::new(BufReader::new(file))),
     }
 }
 

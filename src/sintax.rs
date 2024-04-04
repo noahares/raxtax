@@ -19,7 +19,7 @@ pub fn sintax<'a, 'b>(
 ) -> Vec<(&'b String, Option<Vec<(&'a String, Vec<f64>)>>)> {
     let num_non_convergence_queries = AtomicUsize::new(0);
     let threshold = f64::ceil(args.num_k_mers as f64 * args.min_hit_fraction) as u8;
-    let mse_discard_treshold = 1.0 / 10_u32.pow(utils::F64_OUTPUT_ACCURACY) as f64;
+    let mse_discard_threshold = 1.0 / 10_u32.pow(utils::F64_OUTPUT_ACCURACY) as f64;
     let min_iterations: usize =
         (args.min_iterations * args.num_iterations as f64).max(1.0) as usize;
     let (query_labels, query_sequences) = query_data;
@@ -87,27 +87,23 @@ pub fn sintax<'a, 'b>(
                     relevant_hits.iter().tuple_windows().all(|(a, b)| a.0 < b.0)
                         && relevant_hits.last().unwrap_or(&(0, &0)).0 < hit_buffer.len()
                 );
-                relevant_hits.into_iter().for_each(|(idx, _)| {
+                relevant_hits.iter().for_each(|(idx, _)| {
                     unsafe {
                         *hit_buffer.get_unchecked_mut(
-                            *lookup_table.sequence_species_map.get_unchecked(idx),
+                            *lookup_table.sequence_species_map.get_unchecked(*idx),
                         ) += 1.0 / num_hits as f64
                     };
                 });
                 if !args.no_early_stopping && j + 1 >= min_iterations {
-                    let mse = last_hit_buffer
-                        .unwrap()
-                        .iter()
-                        .zip_eq(hit_buffer.iter())
-                        .filter(|(_, c)| **c / (j + 1) as f64 >= mse_discard_treshold)
-                        .fold(0.0, |acc, (&a, b)| {
-                            acc + (a / j as f64 - b / (j + 1) as f64).powi(2)
-                        })
-                        / (hit_buffer
-                            .iter()
-                            .filter(|&&v| v / (j + 1) as f64 >= mse_discard_treshold)
-                            .count() as f64).max(1.0);
-                    if mse < args.early_stop_mse {
+                    if relevant_hits.is_empty()
+                        || utils::check_convergence(
+                            &hit_buffer,
+                            last_hit_buffer.as_ref().unwrap(),
+                            j,
+                            mse_discard_threshold,
+                            args.early_stop_mse,
+                        )
+                    {
                         num_completed_iterations = j + 1;
                         debug!("{query_label} Stopped after {num_completed_iterations} iterations");
                         break;
