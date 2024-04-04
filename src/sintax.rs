@@ -4,7 +4,7 @@ use crate::utils;
 use crate::{io::Args, parser::LookupTables};
 use indicatif::{ParallelProgressIterator, ProgressStyle};
 use itertools::Itertools;
-use log::{debug, info, Level};
+use log::{debug, info, warn, Level};
 use logging_timer::{time, timer};
 use rand::seq::SliceRandom;
 use rand_xoshiro::rand_core::SeedableRng;
@@ -37,7 +37,10 @@ pub fn sintax<'a, 'b>(
         .with_message("Running Queries...")
         .map(|(i, (query_label, query_sequence))| {
             if let Some(label_idxs) = lookup_table.sequences.get(query_sequence) {
-                debug!("Exact sequence match for query {query_label}!");
+                debug!("Exact sequence match for query {query_label}");
+                if !label_idxs.iter().map(|&idx| lookup_table.labels[idx].split('|').take(5).join("|")).all_equal() {
+                    warn!("Exact matches for {query_label} differ above the species level! Confidence values will be wrong!")
+                }
                 return (
                     i,
                     query_label,
