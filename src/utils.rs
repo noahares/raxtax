@@ -1,10 +1,11 @@
-use std::{collections::HashSet, io::Write};
+use std::{collections::HashSet, io::{Write, Read, BufReader}, fs::File, path::PathBuf};
 
+use flate2::read::GzDecoder;
 use itertools::Itertools;
 use logging_timer::time;
 
 use crate::parser::LookupTables;
-use anyhow::Result;
+use anyhow::{Result, bail};
 
 pub const F64_OUTPUT_ACCURACY: u32 = 2;
 
@@ -21,6 +22,26 @@ pub fn sequence_to_kmers(sequence: &[u8]) -> Vec<u16> {
         k_mers.insert(k_mer);
     });
     k_mers.into_iter().unique().sorted().collect_vec()
+}
+
+pub fn get_reader(path: &PathBuf) -> Result<Box<dyn Read>> {
+    let file_type = match path.extension() {
+        Some(ext) => match ext.to_str() {
+            Some(ext_str) => ext_str.to_ascii_lowercase(),
+            None => bail!("Extension could not be parsed!"),
+        },
+        None => "fasta".to_string()
+    };
+
+    let file = File::open(path)?;
+
+    match file_type.as_str() {
+        "gz" | "gzip" => {
+            let reader = Box::new(GzDecoder::new(file));
+            Ok(Box::new(BufReader::new(reader)))
+        }
+        _ => Ok(Box::new(BufReader::new(file)))
+    }
 }
 
 #[time("debug")]

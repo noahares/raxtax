@@ -8,9 +8,10 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
-    fs,
     path::PathBuf,
 };
+
+use crate::utils;
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct LookupTables {
@@ -22,7 +23,8 @@ pub struct LookupTables {
 }
 
 pub fn parse_reference_fasta_file(sequence_path: &PathBuf) -> Result<LookupTables> {
-    let fasta_str = fs::read_to_string(sequence_path)?;
+    let mut fasta_str = String::new();
+    let _ = utils::get_reader(sequence_path)?.read_to_string(&mut fasta_str);
     parse_reference_fasta_str(&fasta_str)
 }
 
@@ -208,7 +210,8 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
 }
 
 pub fn parse_query_fasta_file(sequence_path: &PathBuf) -> Result<(Vec<String>, Vec<Vec<u8>>)> {
-    let fasta_str = fs::read_to_string(sequence_path)?;
+    let mut fasta_str = String::new();
+    let _ = utils::get_reader(sequence_path)?.read_to_string(&mut fasta_str);
     parse_query_fasta_str(&fasta_str)
 }
 
