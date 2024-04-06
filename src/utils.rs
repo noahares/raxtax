@@ -2,12 +2,14 @@ use std::{
     collections::HashSet,
     fs::File,
     io::{BufReader, Read, Write},
-    path::PathBuf,
+    path::PathBuf, arch::x86_64::{_mm_loadu_si128, __m128i, _mm_cmpestrm, _SIDD_BIT_MASK, _SIDD_UWORD_OPS, _SIDD_CMP_EQUAL_ANY, _mm_extract_epi32, _popcnt32, _mm_extract_epi16},
 };
 
 use flate2::read::GzDecoder;
+use indicatif::{ParallelProgressIterator, ProgressStyle};
 use itertools::Itertools;
 use logging_timer::time;
+use rayon::prelude::*;
 
 use crate::parser::LookupTables;
 use anyhow::{bail, Result};
@@ -26,7 +28,60 @@ pub fn sequence_to_kmers(sequence: &[u8]) -> Vec<u16> {
         k_mer = (k_mer << 2) | *c as u16;
         k_mers.insert(k_mer);
     });
-    k_mers.into_iter().unique().sorted().collect_vec()
+    k_mers.into_iter().sorted().collect_vec()
+}
+
+fn sse_ordered_set_intersection_count(set_a: &[u16], set_b: &[u16]) -> usize {
+    let mut idx_a = 0_isize;
+    let mut idx_b = 0_isize;
+    let mut count = 0;
+    let last_bulk_index_a = (set_a.len() >> 3) << 3;
+    let last_bulk_index_b = (set_b.len() >> 3) << 3;
+    let remainder_a = (set_a.len() - last_bulk_index_a) as i32;
+    let remainder_b = (set_b.len() - last_bulk_index_b) as i32;
+
+    const IMM8: i32 = _SIDD_UWORD_OPS|_SIDD_CMP_EQUAL_ANY|_SIDD_BIT_MASK;
+    let mut ptr_a = set_a.as_ptr();
+    let mut ptr_b = set_b.as_ptr();
+    while (idx_a as usize) < last_bulk_index_a && (idx_b as usize) < last_bulk_index_b {
+        unsafe {
+        let v_a = _mm_loadu_si128(ptr_a as *const __m128i);
+        let v_b = _mm_loadu_si128(ptr_b as *const __m128i);
+        let res = _mm_cmpestrm::<IMM8>(v_a, 8, v_b, 8);
+        let r = _mm_extract_epi32(res, 0);
+        count += _popcnt32(r) as usize;
+        let a7 = _mm_extract_epi16::<7>(v_a);
+        let b7 = _mm_extract_epi16::<7>(v_b);
+        idx_a += (a7 <= b7) as isize * 8;
+        idx_b += (a7 >= b7) as isize * 8;
+        ptr_a = ptr_a.add((a7 <= b7) as usize * 8);
+        ptr_b = ptr_b.add((a7 >= b7) as usize * 8);
+        }
+    }
+    unsafe {
+        let v_a = _mm_loadu_si128(ptr_a as *const __m128i);
+        let v_b = _mm_loadu_si128(ptr_b as *const __m128i);
+        let res = _mm_cmpestrm::<IMM8>(v_a, remainder_a, v_b, remainder_b);
+        let r = _mm_extract_epi32(res, 0);
+        count += _popcnt32(r) as usize;
+    }
+    count
+}
+
+pub fn create_intersection_distribution_parameters(database_kmers: &[Vec<u16>], query_kmers: &[Vec<u16>]) -> Vec<f64> {
+    query_kmers.par_iter()
+        .progress_with_style(
+            ProgressStyle::with_template(
+                "[{elapsed_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7}[ETA:{eta}] {msg}",
+            )
+            .unwrap()
+            .progress_chars("##-"),
+        )
+        .with_message("Calculating intersection parameters...")
+        .flat_map_iter(|q| database_kmers.iter().map(|d| {
+            sse_ordered_set_intersection_count(q, d) as f64 / q.len() as f64
+        }))
+    .collect()
 }
 
 pub fn check_convergence(
@@ -288,7 +343,7 @@ pub fn output_results(
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::parse_reference_fasta_str;
+    use crate::{parser::parse_reference_fasta_str, utils::sse_ordered_set_intersection_count};
 
     use super::accumulate_results;
 
@@ -328,5 +383,12 @@ ATACGCTTTGCGT";
                 ),
             ])
         );
+    }
+
+    #[test]
+    fn test_fast_intersection() {
+        let set_a = vec![0_u16, 1, 4, 5, 8, 12, 16, 17, 18, 29, 33, 43, 55, 61, 75, 85, 90];
+        let set_b = vec![0_u16, 1, 2, 5, 9, 12, 13, 17, 18, 31, 34, 43, 55, 61, 75, 85, 88, 90, 100];
+        assert_eq!(sse_ordered_set_intersection_count(&set_a, &set_b), 12);
     }
 }

@@ -18,7 +18,7 @@ pub struct LookupTables {
     pub labels: Vec<String>,
     pub sequences: HashMap<Vec<u8>, Vec<usize>>,
     pub level_hierarchy_maps: Vec<Vec<Vec<usize>>>,
-    pub k_mer_map: Vec<Vec<usize>>,
+    pub kmers_per_sequence: Vec<Vec<u16>>,
     pub sequence_species_map: Vec<usize>,
 }
 
@@ -37,7 +37,7 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
     // Level 4: Genus
     // Level 5: Species
     let mut level_sets: [HashSet<String>; 6] = Default::default();
-    let mut k_mer_map: Vec<Vec<usize>> = vec![Vec::new(); 2 << 15];
+    let mut kmers_per_sequence: Vec<HashSet<u16>> = Vec::new();
     let regex = Regex::new(r".*tax=p:(.*?),c:(.*?),o:(.*?),f:(.*?),g:(.*?),s:(.*?);")?;
     let (labels, sequences) = {
         let _tmr = timer!(Level::Info; "Read file and create k-mer mapping");
@@ -123,10 +123,10 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
                     .iter()
                     .enumerate()
                     .for_each(|(j, c)| k_mer |= (*c as u16) << (14 - j * 2));
-                k_mer_map[k_mer as usize].push(idx);
+                kmers_per_sequence.push(HashSet::from([k_mer]));
                 s[8..].iter().for_each(|c| {
                     k_mer = (k_mer << 2) | *c as u16;
-                    k_mer_map[k_mer as usize].push(idx);
+                    kmers_per_sequence[idx].insert(k_mer);
                 });
             });
         (ordered_labels, sequence_map)
@@ -201,10 +201,10 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
                     .collect_vec()
             })
             .collect_vec(),
-        k_mer_map: k_mer_map
-            .into_par_iter()
-            .map(|seqs| seqs.into_iter().unique().sorted().collect_vec())
-            .collect(),
+        kmers_per_sequence: kmers_per_sequence
+            .into_iter()
+            .map(|s| s.into_iter().sorted().collect_vec())
+            .collect_vec(),
         sequence_species_map,
     })
 }

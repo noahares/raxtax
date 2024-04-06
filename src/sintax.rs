@@ -4,9 +4,9 @@ use crate::utils;
 use crate::{io::Args, parser::LookupTables};
 use indicatif::{ParallelProgressIterator, ProgressStyle};
 use itertools::Itertools;
-use log::{debug, info, warn, Level, log_enabled};
+use log::{debug, info, log_enabled, warn, Level};
 use logging_timer::{time, timer};
-use rand::seq::SliceRandom;
+use rand_distr::{Binomial, Distribution};
 use rand_xoshiro::rand_core::SeedableRng;
 use rand_xoshiro::Xoroshiro128PlusPlus;
 use rayon::prelude::*;
@@ -18,11 +18,18 @@ pub fn sintax<'a, 'b>(
     args: &Args,
 ) -> Vec<(&'b String, Option<Vec<(&'a String, Vec<f64>)>>)> {
     let num_non_convergence_queries = AtomicUsize::new(0);
-    let threshold = f64::ceil(args.num_k_mers as f64 * args.min_hit_fraction) as u8;
+    // let threshold = f64::ceil(args.num_k_mers as f64 * args.min_hit_fraction) as u8;
     let mse_discard_threshold = 1.0 / 10_u32.pow(utils::F64_OUTPUT_ACCURACY) as f64;
     let min_iterations: usize =
         (args.min_iterations * args.num_iterations as f64).max(1.0) as usize;
     let (query_labels, query_sequences) = query_data;
+    let distributions = utils::create_intersection_distribution_parameters(
+        &lookup_table.kmers_per_sequence,
+        &query_sequences
+            .iter()
+            .map(|s| utils::sequence_to_kmers(s))
+            .collect_vec(),
+    );
     let result = query_labels
         .par_iter()
         .zip_eq(query_sequences.par_iter())
@@ -62,41 +69,83 @@ pub fn sintax<'a, 'b>(
                 );
             }
             // WARN: if number of possible hits can get above 255, this breaks! <noahares>
-            let mut buffer: Vec<u8> = vec![0; lookup_table.labels.len()];
+            // let mut buffer: Vec<u8> = vec![0; lookup_table.labels.len()];
             let mut hit_buffer: Vec<f64> = vec![0.0; lookup_table.level_hierarchy_maps[5].len()];
             let mut rng = Xoroshiro128PlusPlus::seed_from_u64(args.seed);
             let _tmr = timer!(Level::Debug; "Query Time");
-            let k_mers = utils::sequence_to_kmers(query_sequence);
-            let mut last_hit_buffer: Option<Vec<f64>> = match args.no_early_stopping {
-                true => None,
-                false => Some(vec![0.0; hit_buffer.len()]),
-            };
+            let mut last_hit_buffer: Option<Vec<f64>> = None;
             let mut num_completed_iterations = args.num_iterations;
-            for j in 0..args.num_iterations {
-                buffer.fill(0);
-                k_mers
-                    .choose_multiple(&mut rng, args.num_k_mers)
-                    .for_each(|query_kmer| {
-                        lookup_table.k_mer_map[*query_kmer as usize]
-                            .iter()
-                            .for_each(|species_id| {
-                                unsafe { *buffer.get_unchecked_mut(*species_id) += 1 };
-                            });
-                    });
-                let relevant_hits = buffer
+            let relevant_distributions = distributions[(i * lookup_table.labels.len())..((i+1) * lookup_table.labels.len())]
                     .iter()
                     .enumerate()
-                    .filter(|(_, h)| **h >= threshold)
-                    .max_set_by_key(|(_, &value)| value);
+                    .filter(|(_, p)| **p >= args.min_hit_fraction)
+                    .map(|(idx, p)| (idx, Binomial::new(args.num_k_mers as u64, *p).unwrap()))
+                    .collect_vec();
+            if relevant_distributions.is_empty() {
+                return (
+                    i,
+                    query_label,
+                    utils::accumulate_results(lookup_table, &hit_buffer, args.max_target_seqs),
+                );
+            }
+            let buffer: Vec<(usize, u8)> = relevant_distributions.iter().flat_map(|(i, d)| d.sample_iter(&mut rng).take(min_iterations + 1).map(|v| (*i, v as u8)).collect_vec()).collect();
+            for i in 0..min_iterations {
+                let relevant_hits = buffer.iter().skip(i).step_by(relevant_distributions.len()).max_set_by_key(|&(_, value)| value);
+                relevant_hits.iter().for_each(|(idx, _)| {
+                unsafe {
+                    *hit_buffer.get_unchecked_mut(
+                        *lookup_table.sequence_species_map.get_unchecked(*idx),
+                    ) += 1.0 / relevant_hits.len() as f64
+                };
+                });
+            }
+
+            if !args.no_early_stopping {
+                last_hit_buffer = Some(hit_buffer.clone());
+            }
+            let relevant_hits = buffer.iter().skip(min_iterations).step_by(relevant_distributions.len()).max_set_by_key(|&(_, value)| value);
+            relevant_hits.iter().for_each(|(idx, _)| {
+                unsafe {
+                    *hit_buffer.get_unchecked_mut(
+                        *lookup_table.sequence_species_map.get_unchecked(*idx),
+                    ) += 1.0 / relevant_hits.len() as f64
+                }
+            });
+
+            if !args.no_early_stopping {
+                if utils::check_convergence(
+                        &hit_buffer,
+                        last_hit_buffer.as_ref().unwrap(),
+                        min_iterations + 1,
+                        mse_discard_threshold,
+                        args.early_stop_mse,
+                    )
+                {
+                    num_completed_iterations = min_iterations + 1;
+                    debug!("{query_label} Stopped after {num_completed_iterations} iterations");
+                    hit_buffer.iter_mut().for_each(|v| *v /= num_completed_iterations as f64);
+            return (
+                i,
+                query_label,
+                utils::accumulate_results(lookup_table, &hit_buffer, args.max_target_seqs),
+            );
+                }
+                last_hit_buffer = Some(hit_buffer.clone());
+            }
+
+            for j in (min_iterations + 1)..args.num_iterations {
+                let relevant_hits = relevant_distributions.iter()
+                    .map(|(idx, d)| (idx, d.sample(&mut rng) as u8))
+                    .max_set_by_key(|&(_, value)| value);
                 let num_hits = relevant_hits.len();
                 debug_assert!(
                     relevant_hits.iter().tuple_windows().all(|(a, b)| a.0 < b.0)
-                        && relevant_hits.last().unwrap_or(&(0, &0)).0 < hit_buffer.len()
+                        && relevant_hits.last().unwrap_or(&(&0, 0)).0 < &hit_buffer.len()
                 );
                 relevant_hits.iter().for_each(|(idx, _)| {
                     unsafe {
                         *hit_buffer.get_unchecked_mut(
-                            *lookup_table.sequence_species_map.get_unchecked(*idx),
+                            *lookup_table.sequence_species_map.get_unchecked(**idx),
                         ) += 1.0 / num_hits as f64
                     };
                 });
