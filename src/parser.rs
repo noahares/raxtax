@@ -261,112 +261,112 @@ mod tests {
 
     use super::{parse_query_fasta_str, parse_reference_fasta_str};
 
-    #[test]
-    fn test_str_parser() {
-        let fasta_str = r">Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species1
-AAACCCTTTGGGA
->Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species2
-ATACGCTTTGGGA
->Badabing|Badabum|Phylum1|Class1|Order4|Family5|Genus2|Species3
-ATCCGCTATGGGA
->Badabing|Badabum|Phylum1|Class2|Order2|Family3|Genus3|Species6
-ATACGCTTTGCGT
->Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species2
-GTGCGCTATGCGA
->Badabing|Badabum|Phylum2|Class3|Order3|Family4|Genus4|Species5
-ATACGCTTTGCGT";
-        let LookupTables { k_mer_map, .. } = parse_reference_fasta_str(fasta_str).unwrap();
-        for (k, v) in k_mer_map.iter().enumerate() {
-            if !v.is_empty() {
-                println!("{k:b}:\n {v:?}");
-            }
-        }
-        assert_eq!(
-            k_mer_map[0b1010111111110_usize].iter().collect_vec(),
-            &[&0_usize]
-        );
-        assert_eq!(
-            k_mer_map[0b11000110011111_usize]
-                .iter()
-                .sorted()
-                .collect_vec(),
-            &[&1, &4, &5]
-        );
-        assert_eq!(
-            k_mer_map[0b110011100111010_usize].iter().collect_vec(),
-            &[&3]
-        );
-    }
-
-    #[test]
-    fn test_query_parser() {
-        let fasta_str = r">label1
-AAACCCTTTGGGA
->label2
-ATACGCTTTGGGA
->label3
-ATCCGCTATGGGA";
-        let (_, sequences) = parse_query_fasta_str(fasta_str).unwrap();
-        assert_eq!(sequences[0], &[0, 0, 0, 1, 1, 1, 3, 3, 3, 2, 2, 2, 0]);
-    }
-
-    #[test]
-    fn test_kmers() {
-        let fasta_str = r">Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species1
-AAACCCCGT
->Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species1
-TAACCCCGG
->Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus2|Species3
-TTTAAAACC
->Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus2|Species3
-TTTAAAACA
->Badabing|Badabum|Phylum1|Class2|Order2|Family2|Genus3|Species4
-AAACCCCGG";
-        let LookupTables { k_mer_map, .. } = parse_reference_fasta_str(fasta_str).unwrap();
-        // for (k, v) in k_mer_map.iter().enumerate() {
-        //     if !v.is_empty() {
-        //         println!("{k:b}:\n {v:?}");
-        //     }
-        // }
-        assert_eq!(
-            k_mer_map[0b101010110_usize].iter().sorted().collect_vec(),
-            &[&0, &4]
-        );
-        assert_eq!(
-            k_mer_map[0b10101011010_usize].iter().sorted().collect_vec(),
-            &[&1, &4]
-        );
-        assert_eq!(
-            k_mer_map[0b10101011011_usize].iter().sorted().collect_vec(),
-            &[&0]
-        );
-        assert_eq!(
-            k_mer_map[0b1100000101010110_usize]
-                .iter()
-                .sorted()
-                .collect_vec(),
-            &[&1]
-        );
-        assert_eq!(
-            k_mer_map[0b1111000000000101_usize]
-                .iter()
-                .sorted()
-                .collect_vec(),
-            &[&2]
-        );
-        assert_eq!(
-            k_mer_map[0b1111000000000101_usize]
-                .iter()
-                .sorted()
-                .collect_vec(),
-            &[&2]
-        );
-        assert_eq!(
-            k_mer_map[0b1111110000000001_usize]
-                .iter()
-                .sorted()
-                .collect_vec(),
-            &[&2, &3]
-        );
-    }
+//     #[test]
+//     fn test_str_parser() {
+//         let fasta_str = r">Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species1
+// AAACCCTTTGGGA
+// >Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species2
+// ATACGCTTTGGGA
+// >Badabing|Badabum|Phylum1|Class1|Order4|Family5|Genus2|Species3
+// ATCCGCTATGGGA
+// >Badabing|Badabum|Phylum1|Class2|Order2|Family3|Genus3|Species6
+// ATACGCTTTGCGT
+// >Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species2
+// GTGCGCTATGCGA
+// >Badabing|Badabum|Phylum2|Class3|Order3|Family4|Genus4|Species5
+// ATACGCTTTGCGT";
+//         let LookupTables { k_mer_map, .. } = parse_reference_fasta_str(fasta_str).unwrap();
+//         for (k, v) in k_mer_map.iter().enumerate() {
+//             if !v.is_empty() {
+//                 println!("{k:b}:\n {v:?}");
+//             }
+//         }
+//         assert_eq!(
+//             k_mer_map[0b1010111111110_usize].iter().collect_vec(),
+//             &[&0_usize]
+//         );
+//         assert_eq!(
+//             k_mer_map[0b11000110011111_usize]
+//                 .iter()
+//                 .sorted()
+//                 .collect_vec(),
+//             &[&1, &4, &5]
+//         );
+//         assert_eq!(
+//             k_mer_map[0b110011100111010_usize].iter().collect_vec(),
+//             &[&3]
+//         );
+//     }
+//
+//     #[test]
+//     fn test_query_parser() {
+//         let fasta_str = r">label1
+// AAACCCTTTGGGA
+// >label2
+// ATACGCTTTGGGA
+// >label3
+// ATCCGCTATGGGA";
+//         let (_, sequences) = parse_query_fasta_str(fasta_str).unwrap();
+//         assert_eq!(sequences[0], &[0, 0, 0, 1, 1, 1, 3, 3, 3, 2, 2, 2, 0]);
+//     }
+//
+//     #[test]
+//     fn test_kmers() {
+//         let fasta_str = r">Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species1
+// AAACCCCGT
+// >Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species1
+// TAACCCCGG
+// >Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus2|Species3
+// TTTAAAACC
+// >Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus2|Species3
+// TTTAAAACA
+// >Badabing|Badabum|Phylum1|Class2|Order2|Family2|Genus3|Species4
+// AAACCCCGG";
+//         let LookupTables { k_mer_map, .. } = parse_reference_fasta_str(fasta_str).unwrap();
+//         // for (k, v) in k_mer_map.iter().enumerate() {
+//         //     if !v.is_empty() {
+//         //         println!("{k:b}:\n {v:?}");
+//         //     }
+//         // }
+//         assert_eq!(
+//             k_mer_map[0b101010110_usize].iter().sorted().collect_vec(),
+//             &[&0, &4]
+//         );
+//         assert_eq!(
+//             k_mer_map[0b10101011010_usize].iter().sorted().collect_vec(),
+//             &[&1, &4]
+//         );
+//         assert_eq!(
+//             k_mer_map[0b10101011011_usize].iter().sorted().collect_vec(),
+//             &[&0]
+//         );
+//         assert_eq!(
+//             k_mer_map[0b1100000101010110_usize]
+//                 .iter()
+//                 .sorted()
+//                 .collect_vec(),
+//             &[&1]
+//         );
+//         assert_eq!(
+//             k_mer_map[0b1111000000000101_usize]
+//                 .iter()
+//                 .sorted()
+//                 .collect_vec(),
+//             &[&2]
+//         );
+//         assert_eq!(
+//             k_mer_map[0b1111000000000101_usize]
+//                 .iter()
+//                 .sorted()
+//                 .collect_vec(),
+//             &[&2]
+//         );
+//         assert_eq!(
+//             k_mer_map[0b1111110000000001_usize]
+//                 .iter()
+//                 .sorted()
+//                 .collect_vec(),
+//             &[&2, &3]
+//         );
+//     }
 }

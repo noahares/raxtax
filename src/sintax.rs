@@ -23,13 +23,6 @@ pub fn sintax<'a, 'b>(
     let min_iterations: usize =
         (args.min_iterations * args.num_iterations as f64).max(1.0) as usize;
     let (query_labels, query_sequences) = query_data;
-    let distributions = utils::create_intersection_distribution_parameters(
-        &lookup_table.kmers_per_sequence,
-        &query_sequences
-            .iter()
-            .map(|s| utils::sequence_to_kmers(s))
-            .collect_vec(),
-    );
     let result = query_labels
         .par_iter()
         .zip_eq(query_sequences.par_iter())
@@ -75,11 +68,13 @@ pub fn sintax<'a, 'b>(
             let _tmr = timer!(Level::Debug; "Query Time");
             let mut last_hit_buffer: Option<Vec<f64>> = None;
             let mut num_completed_iterations = args.num_iterations;
-            let relevant_distributions = distributions[(i * lookup_table.labels.len())..((i+1) * lookup_table.labels.len())]
+            let relevant_distributions = utils::create_intersection_distribution_parameters(
+                &lookup_table.kmers_per_sequence,
+                &utils::sequence_to_kmers(query_sequence),
+                args.min_hit_fraction,
+            )
                     .iter()
-                    .enumerate()
-                    .filter(|(_, p)| **p >= args.min_hit_fraction)
-                    .map(|(idx, p)| (idx, Binomial::new(args.num_k_mers as u64, *p).unwrap()))
+                    .map(|(idx, p)| (*idx, Binomial::new(args.num_k_mers as u64, *p).unwrap()))
                     .collect_vec();
             if relevant_distributions.is_empty() {
                 return (
@@ -149,7 +144,7 @@ pub fn sintax<'a, 'b>(
                         ) += 1.0 / num_hits as f64
                     };
                 });
-                if !args.no_early_stopping && j + 1 >= min_iterations {
+                if !args.no_early_stopping {
                     if relevant_hits.is_empty()
                         || utils::check_convergence(
                             &hit_buffer,
@@ -221,6 +216,11 @@ mod tests {
             verbosity: clap_verbosity_flag::Verbosity::default(),
             min_confidence: 0.0,
             confidence_output: None,
+            early_stop_mse: 1e-6,
+            min_iterations: 0.1,
+            log_output: None,
+            no_early_stopping: false,
+            redo: false,
         };
         let fasta_str = r">BOLD:AAP6467|SSBAE436-13|Canada|Arthropoda|Insecta|Diptera|Sciaridae|Claustropyga|Claustropyga_acanthostyla
 TTTATCTTCTACATTATCTCACTCAGGGGCTTCAGTAGATCTATCTATTTTTTCTTTACATTTAGCAGGTATTTCATCAATTTTAGGAGCTGTAAATTTTATTTCTACTATTATTAATATACGAGCGCCAGGAATATCTTTTGATAAAATACCCTTATTTATTTGATCTGTATTAATTACAGCAATTTTATTATTATTATCATTA

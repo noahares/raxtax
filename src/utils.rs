@@ -15,6 +15,7 @@ use crate::parser::LookupTables;
 use anyhow::{bail, Result};
 
 pub const F64_OUTPUT_ACCURACY: u32 = 2;
+const IMM8: i32 = _SIDD_UWORD_OPS|_SIDD_CMP_EQUAL_ANY|_SIDD_BIT_MASK;
 
 pub fn sequence_to_kmers(sequence: &[u8]) -> Vec<u16> {
     let mut k_mer: u16 = 0;
@@ -31,19 +32,18 @@ pub fn sequence_to_kmers(sequence: &[u8]) -> Vec<u16> {
     k_mers.into_iter().sorted().collect_vec()
 }
 
-fn sse_ordered_set_intersection_count(set_a: &[u16], set_b: &[u16]) -> usize {
-    let mut idx_a = 0_isize;
-    let mut idx_b = 0_isize;
+fn sse42_ordered_set_intersection_count(set_a: &[u16], set_b: &[u16]) -> usize {
+    let mut idx_a = 0_usize;
+    let mut idx_b = 0_usize;
     let mut count = 0;
-    let last_bulk_index_a = (set_a.len() >> 3) << 3;
-    let last_bulk_index_b = (set_b.len() >> 3) << 3;
-    let remainder_a = (set_a.len() - last_bulk_index_a) as i32;
-    let remainder_b = (set_b.len() - last_bulk_index_b) as i32;
+    let max_steps_a = set_a.len() >> 3;
+    let max_steps_b = set_b.len() >> 3;
+    let remainder_a = (set_a.len() - (max_steps_a << 3)) as i32;
+    let remainder_b = (set_b.len() - (max_steps_b << 3)) as i32;
 
-    const IMM8: i32 = _SIDD_UWORD_OPS|_SIDD_CMP_EQUAL_ANY|_SIDD_BIT_MASK;
     let mut ptr_a = set_a.as_ptr();
     let mut ptr_b = set_b.as_ptr();
-    while (idx_a as usize) < last_bulk_index_a && (idx_b as usize) < last_bulk_index_b {
+    while idx_a < max_steps_a && idx_b < max_steps_b {
         unsafe {
         let v_a = _mm_loadu_si128(ptr_a as *const __m128i);
         let v_b = _mm_loadu_si128(ptr_b as *const __m128i);
@@ -52,10 +52,10 @@ fn sse_ordered_set_intersection_count(set_a: &[u16], set_b: &[u16]) -> usize {
         count += _popcnt32(r) as usize;
         let a7 = _mm_extract_epi16::<7>(v_a);
         let b7 = _mm_extract_epi16::<7>(v_b);
-        idx_a += (a7 <= b7) as isize * 8;
-        idx_b += (a7 >= b7) as isize * 8;
-        ptr_a = ptr_a.add((a7 <= b7) as usize * 8);
-        ptr_b = ptr_b.add((a7 >= b7) as usize * 8);
+        idx_a += (a7 <= b7) as usize;
+        idx_b += (a7 >= b7) as usize;
+        ptr_a = ptr_a.add(((a7 <= b7) as usize) << 3);
+        ptr_b = ptr_b.add(((a7 >= b7) as usize) << 3);
         }
     }
     unsafe {
@@ -68,20 +68,11 @@ fn sse_ordered_set_intersection_count(set_a: &[u16], set_b: &[u16]) -> usize {
     count
 }
 
-pub fn create_intersection_distribution_parameters(database_kmers: &[Vec<u16>], query_kmers: &[Vec<u16>]) -> Vec<f64> {
-    query_kmers.par_iter()
-        .progress_with_style(
-            ProgressStyle::with_template(
-                "[{elapsed_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7}[ETA:{eta}] {msg}",
-            )
-            .unwrap()
-            .progress_chars("##-"),
-        )
-        .with_message("Calculating intersection parameters...")
-        .flat_map_iter(|q| database_kmers.iter().map(|d| {
-            sse_ordered_set_intersection_count(q, d) as f64 / q.len() as f64
-        }))
-    .collect()
+pub fn create_intersection_distribution_parameters(database_kmers: &[Vec<u16>], query_kmers: &[u16], threshold: f64) -> Vec<(usize, f64)> {
+        database_kmers.iter().enumerate().map(|(i, d)| {
+            (i, sse42_ordered_set_intersection_count(query_kmers, d) as f64 / query_kmers.len() as f64)
+            })
+            .filter(|(_, p)| *p >= threshold).collect_vec()
 }
 
 pub fn check_convergence(
@@ -343,7 +334,7 @@ pub fn output_results(
 
 #[cfg(test)]
 mod tests {
-    use crate::{parser::parse_reference_fasta_str, utils::sse_ordered_set_intersection_count};
+    use crate::{parser::parse_reference_fasta_str, utils::sse42_ordered_set_intersection_count};
 
     use super::accumulate_results;
 
@@ -389,6 +380,6 @@ ATACGCTTTGCGT";
     fn test_fast_intersection() {
         let set_a = vec![0_u16, 1, 4, 5, 8, 12, 16, 17, 18, 29, 33, 43, 55, 61, 75, 85, 90];
         let set_b = vec![0_u16, 1, 2, 5, 9, 12, 13, 17, 18, 31, 34, 43, 55, 61, 75, 85, 88, 90, 100];
-        assert_eq!(sse_ordered_set_intersection_count(&set_a, &set_b), 12);
+        assert_eq!(sse42_ordered_set_intersection_count(&set_a, &set_b), 12);
     }
 }
