@@ -52,7 +52,7 @@ pub fn sintax<'a, 'b>(
                 );
             }
             // WARN: if number of possible hits can get above 255, this breaks! <noahares>
-            let mut intersect_buffer: Vec<u32> = vec![0; lookup_table.labels.len()];
+            let mut intersect_buffer: Vec<usize> = vec![0; lookup_table.labels.len()];
             let mut hit_buffer: Vec<f64> = vec![0.0; lookup_table.level_hierarchy_maps[5].len()];
             let _tmr = timer!(Level::Debug; "Query Time");
             let k_mers = utils::sequence_to_kmers(query_sequence);
@@ -65,15 +65,17 @@ pub fn sintax<'a, 'b>(
                             unsafe { *intersect_buffer.get_unchecked_mut(*species_id) += 1 };
                         });
                 });
-            let higest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len() as u64, args.num_k_mers as u64, &intersect_buffer);
+            let higest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len(), args.num_k_mers, (args.num_k_mers as f64 * args.min_hit_fraction) as usize, &intersect_buffer);
             let probs_sum: f64 = higest_hit_probs.iter().sum();
-            higest_hit_probs.iter().enumerate().for_each(|(idx, &v)| {
-                unsafe {
-                    *hit_buffer.get_unchecked_mut(
-                        *lookup_table.sequence_species_map.get_unchecked(idx),
-                    ) += v / probs_sum
-                };
-            });
+            if probs_sum > 0.0 {
+                higest_hit_probs.iter().enumerate().for_each(|(idx, &v)| {
+                    unsafe {
+                        *hit_buffer.get_unchecked_mut(
+                            *lookup_table.sequence_species_map.get_unchecked(idx),
+                        ) += v / probs_sum
+                    };
+                });
+            }
             (
                 i,
                 query_label,

@@ -3,26 +3,30 @@ use std::collections::HashMap;
 use itertools::Itertools;
 use statrs::function::factorial::binomial;
 
-// pub struct QueryOracle {
-//     pmfs: HashMap<usize, Vec<f64>>,
-//     cmfs: HashMap<usize, Vec<f64>>,
-//     hit_probs: Vec<f64>
-// }
+use crate::utils;
 
-// impl QueryOracle {
 pub fn highest_hit_prob_per_reference(
-    total_num_k_mers: u64,
-    num_trials: u64,
-    intersection_sizes: &[u32],
+    total_num_k_mers: usize,
+    num_trials: usize,
+    min_success_trials: usize,
+    intersection_sizes: &[usize],
 ) -> Vec<f64> {
+    let prob_threshold = 1.0 / 10_u32.pow(utils::F64_OUTPUT_ACCURACY) as f64;
     let intersection_size_counts = intersection_sizes.iter().counts();
     let pmfs: HashMap<usize, Vec<f64>> = intersection_size_counts
         .keys()
         .map(|&&n_intersections| {
             (
-                n_intersections as usize,
+                n_intersections,
                 (0..=num_trials)
-                    .map(|i| pmf(total_num_k_mers, i, num_trials, n_intersections as u64))
+                    .map(|i| {
+                        pmf(
+                            total_num_k_mers as u64,
+                            i as u64,
+                            num_trials as u64,
+                            n_intersections as u64,
+                        )
+                    })
                     .collect_vec(),
             )
         })
@@ -41,23 +45,19 @@ pub fn highest_hit_prob_per_reference(
             )
         })
         .collect();
-    let cmf_prod_components = (0..=num_trials)
+    let cmf_prod_components = (min_success_trials..=num_trials)
         .map(|i| {
-            (0..=i)
-                .map(|j| {
-                    intersection_size_counts
-                        .iter()
-                        .map(|(&&size, &count)| {
-                            let x = cmfs[&(size as usize)][j as usize];
-                            if x < f64::EPSILON {
-                                1.0
-                            } else {
-                                cmfs[&(size as usize)][j as usize].powi(count as i32)
-                            }
-                        })
-                        .product::<f64>()
+            intersection_size_counts
+                .iter()
+                .map(|(&&size, &count)| {
+                    let x = cmfs[&size][i];
+                    if x < f64::EPSILON {
+                        1.0
+                    } else {
+                        x.powi(count as i32)
+                    }
                 })
-                .collect_vec()
+                .product::<f64>()
         })
         .collect_vec();
     let highest_hit_probs: HashMap<usize, f64> = pmfs
@@ -65,35 +65,42 @@ pub fn highest_hit_prob_per_reference(
         .map(|(i, v)| {
             (
                 *i,
-                v.iter()
+                v[min_success_trials..]
+                    .iter()
                     .enumerate()
                     .zip_eq(cmf_prod_components.iter())
-                    .map(|((j, pdf), prod_components)| {
-                        pdf * prod_components
-                            .iter()
-                            .map(|prod| {
-                                let x = cmfs[i][j];
-                                if x < f64::EPSILON {
-                                    *prod
-                                } else {
-                                    prod / cmfs[i][j]
-                                }
-                            })
-                            .sum::<f64>()
+                    .map(|((j, pmf), prod_components)| {
+                        let x = cmfs[i][j + min_success_trials];
+                        if x < f64::EPSILON {
+                            pmf * prod_components
+                        } else {
+                            pmf * prod_components / x
+                        }
                     })
-                    .sum(),
+                    .sum::<f64>(),
             )
         })
         .collect();
     intersection_sizes
         .iter()
-        .map(|&n_intersections| highest_hit_probs[&(n_intersections as usize)])
+        .map(|&n_intersections| {
+            let prob = highest_hit_probs[&n_intersections];
+            if prob < prob_threshold {
+                0.0
+            } else {
+                prob
+            }
+        })
         .collect_vec()
 }
 
 pub fn pmf(total_num_k_mers: u64, i: u64, num_trials: u64, num_intersections: u64) -> f64 {
-    if num_intersections == total_num_k_mers && i == num_trials {
-        return 1.0;
+    if num_intersections == total_num_k_mers {
+        if i == num_trials {
+            return 1.0;
+        } else {
+            return 0.0;
+        }
     }
     if num_intersections == 0 {
         if i == 0 {
@@ -102,7 +109,6 @@ pub fn pmf(total_num_k_mers: u64, i: u64, num_trials: u64, num_intersections: u6
             return 0.0;
         }
     }
-    // TODO: deal with cases where n or k are negative
     let num_possible_matches = binomial(num_intersections + i - 1, i);
     let num_impossible_matches = binomial(
         (total_num_k_mers - num_intersections) + (num_trials - i) - 1,
@@ -112,38 +118,28 @@ pub fn pmf(total_num_k_mers: u64, i: u64, num_trials: u64, num_intersections: u6
     num_possible_matches * num_impossible_matches / num_possible_kmer_sets
 }
 
-pub fn cmf(pmfs: &[f64], max_matches: usize) -> f64 {
-    pmfs[0..=max_matches].iter().sum()
-}
-
 #[cfg(test)]
 mod tests {
     use itertools::Itertools;
     use statrs::assert_almost_eq;
-
-    use crate::prob::cmf;
 
     use super::{highest_hit_prob_per_reference, pmf};
 
     #[test]
     fn test_pmf() {
         let p = pmf(200, 31, 32, 199);
-        // dbg!(p);
+        dbg!(p);
         assert_almost_eq!(p, 0.119857, 1e-7);
     }
 
     #[test]
-    fn test_cmf() {
-        let pdfs = (0..=32).map(|i| pmf(200, i, 32, 199)).collect_vec();
-        // dbg!(&pdfs);
-        let c = cmf(&pdfs, 30);
-        assert_almost_eq!(c, 0.5573349, 1e-7);
-    }
-
-    #[test]
     fn test_hit_prob() {
-        let probs = highest_hit_prob_per_reference(200, 32, &(0..=200).collect_vec());
-        dbg!(&probs);
-        assert_eq!(probs.iter().sum::<f64>(), 1.0);
+        let probs =
+            highest_hit_prob_per_reference(200, 32, 11, &(0..=200).step_by(10).collect_vec());
+        let sum = probs.iter().sum::<f64>();
+        dbg!(sum);
+        let normalized_probs = probs.iter().map(|v| v / sum).collect_vec();
+        dbg!(&normalized_probs);
+        assert_eq!(normalized_probs.iter().sum::<f64>(), 1.0);
     }
 }
