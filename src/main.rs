@@ -3,7 +3,6 @@ use std::process::exit;
 use clap::Parser;
 use log::error;
 use log::log_enabled;
-use log::warn;
 use log::Level;
 use logging_timer::timer;
 use sintax_ng::io;
@@ -28,20 +27,6 @@ fn main() {
         .format_timestamp(None)
         .format_target(false)
         .init();
-    if args.num_k_mers >= 255 {
-        error!("Using more than 255 k-mers will break this program because of buffer sizes! Please choose fewer k-mers");
-        if log_enabled!(Level::Error) {
-            println!("test");
-            eprintln!("\x1b[31m[ERROR]\x1b[0m Using more than 255 k-mers will break this program because of buffer sizes! Please choose fewer k-mers");
-        }
-        exit(exitcode::USAGE);
-    }
-    if args.num_iterations <= 100 && args.early_stop_mse <= 1e-6 && !args.no_early_stopping {
-        warn!("Executing with low number of iterations ({}) and low early stopping threshold ({}). It is unlikely that the criterion will be met. To boost performance, run with --no-early-stopping.", args.num_iterations, args.early_stop_mse);
-        if log_enabled!(Level::Warn) {
-            eprintln!("\x1b[33m[WARN ]\x1b[0m Executing with low number of iterations ({}) and low early stopping threshold ({}). It is unlikely that the criterion will be met. To boost performance, run with --no-early-stopping.", args.num_iterations, args.early_stop_mse);
-        }
-    }
     let output = match args.get_output() {
         Ok(output) => output,
         Err(e) => {
@@ -101,7 +86,13 @@ fn main() {
             exit(exitcode::NOINPUT);
         }
     };
-    let result = sintax(&query_data, &lookup_table, &args);
+    let result = sintax(
+        &query_data,
+        &lookup_table,
+        args.num_k_mers,
+        args.min_hit_fraction,
+        args.max_target_seqs,
+    );
     match utils::output_results(&result, output, confidence_output, args.min_confidence) {
         Ok(res) => res,
         Err(e) => {

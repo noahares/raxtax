@@ -34,9 +34,6 @@ pub struct Args {
     /// Path to the query file
     #[arg(short = 'i', long)]
     pub query_file: PathBuf,
-    /// Number of iterations per query
-    #[arg(short, long, default_value_t = 1000, value_parser = positive_usize)]
-    pub num_iterations: usize,
     /// Number of 8-mers
     #[arg(short = 'k', long, default_value_t = 32, value_parser = positive_usize)]
     pub num_k_mers: usize,
@@ -49,13 +46,6 @@ pub struct Args {
     /// Number of output species per query
     #[arg(short = 'm', long, default_value_t = 5, value_parser = positive_usize)]
     pub max_target_seqs: usize,
-    /// The MSE threshold of none-zero values in the hit buffer for early stopping
-    /// (This should be around 1e-6 to 1e-8 depending on the required accuracy)
-    #[arg(short = 'e', long, default_value_t = 1e-7, value_parser = normalized_ratio, verbatim_doc_comment)]
-    pub early_stop_mse: f64,
-    /// Fraction of iterations to run before checking the MSE
-    #[arg(short = 'p', long, default_value_t = 0.1, value_parser = normalized_ratio, verbatim_doc_comment)]
-    pub min_iterations: f64,
     /// Number of threads
     /// If 0, uses all available threads
     #[arg(short, long, default_value_t = 0, verbatim_doc_comment)]
@@ -72,10 +62,6 @@ pub struct Args {
     /// log output path
     #[arg(short = 'l', long)]
     pub log_output: Option<PathBuf>,
-    /// Disable early stopping checks
-    /// Recommended when doing few iterations with low stopping threshold to boost performance
-    #[arg(long, verbatim_doc_comment)]
-    pub no_early_stopping: bool,
     /// Force override of existing output files
     #[arg(long)]
     pub redo: bool,

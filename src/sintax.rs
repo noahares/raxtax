@@ -1,19 +1,20 @@
-use crate::{io::Args, parser::LookupTables};
+use crate::parser::LookupTables;
 use crate::{prob, utils};
 use indicatif::{ParallelProgressIterator, ProgressStyle};
 use itertools::Itertools;
-use log::{debug, info, log_enabled, warn, Level};
+use log::{debug, log_enabled, warn, Level};
 use logging_timer::{time, timer};
 use rayon::prelude::*;
 
 #[time("info")]
 pub fn sintax<'a, 'b>(
-    query_data: &'b (Vec<String>, Vec<Vec<u8>>),
+    (query_labels, query_sequences): &'b (Vec<String>, Vec<Vec<u8>>),
     lookup_table: &'a LookupTables,
-    args: &Args,
+    num_k_mers: usize,
+    min_hit_fraction: f64,
+    max_target_seqs: usize,
 ) -> Vec<(&'b String, Option<Vec<(&'a String, Vec<f64>)>>)> {
-    let (query_labels, query_sequences) = query_data;
-    let result = query_labels
+    query_labels
         .par_iter()
         .zip_eq(query_sequences.par_iter())
         .enumerate()
@@ -46,12 +47,11 @@ pub fn sintax<'a, 'b>(
                                     vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0 / label_idxs.len() as f64],
                                 )
                             })
-                            .take(args.max_target_seqs)
+                            .take(max_target_seqs)
                             .collect_vec(),
                     ),
                 );
             }
-            // WARN: if number of possible hits can get above 255, this breaks! <noahares>
             let mut intersect_buffer: Vec<usize> = vec![0; lookup_table.labels.len()];
             let mut hit_buffer: Vec<f64> = vec![0.0; lookup_table.level_hierarchy_maps[5].len()];
             let _tmr = timer!(Level::Debug; "Query Time");
@@ -65,7 +65,7 @@ pub fn sintax<'a, 'b>(
                             unsafe { *intersect_buffer.get_unchecked_mut(*species_id) += 1 };
                         });
                 });
-            let higest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len(), args.num_k_mers, (args.num_k_mers as f64 * args.min_hit_fraction) as usize, &intersect_buffer);
+            let higest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len(), num_k_mers, (num_k_mers as f64 * min_hit_fraction) as usize, &intersect_buffer);
             let probs_sum: f64 = higest_hit_probs.iter().sum();
             if probs_sum > 0.0 {
                 higest_hit_probs.iter().enumerate().for_each(|(idx, &v)| {
@@ -79,48 +79,25 @@ pub fn sintax<'a, 'b>(
             (
                 i,
                 query_label,
-                utils::accumulate_results(lookup_table, &hit_buffer, args.max_target_seqs),
+                utils::accumulate_results(lookup_table, &hit_buffer, max_target_seqs),
             )
         })
         .collect::<Vec<(usize, &String, Option<Vec<(&String, Vec<f64>)>>)>>()
         .into_iter()
         .sorted_by_key(|(i, _, _)| *i)
         .map(|(_, q, v)| (q, v))
-        .collect_vec();
-    result
+        .collect_vec()
 }
 
 #[cfg(test)]
 mod tests {
 
-    use crate::{
-        io::Args,
-        parser::{parse_query_fasta_str, parse_reference_fasta_str},
-    };
+    use crate::parser::{parse_query_fasta_str, parse_reference_fasta_str};
 
     use super::sintax;
 
     #[test]
     fn test_sintax() {
-        let args = Args {
-            database_path: "".into(),
-            query_file: "".into(),
-            num_iterations: 100,
-            num_k_mers: 32,
-            min_hit_fraction: 1.0 / 3.0,
-            max_target_seqs: 3,
-            threads: 1,
-            seed: 42,
-            output: None,
-            verbosity: clap_verbosity_flag::Verbosity::default(),
-            min_confidence: 0.0,
-            confidence_output: None,
-            early_stop_mse: todo!(),
-            min_iterations: todo!(),
-            log_output: todo!(),
-            no_early_stopping: todo!(),
-            redo: todo!(),
-        };
         let fasta_str = r">BOLD:AAP6467|SSBAE436-13|Canada|Arthropoda|Insecta|Diptera|Sciaridae|Claustropyga|Claustropyga_acanthostyla
 TTTATCTTCTACATTATCTCACTCAGGGGCTTCAGTAGATCTATCTATTTTTTCTTTACATTTAGCAGGTATTTCATCAATTTTAGGAGCTGTAAATTTTATTTCTACTATTATTAATATACGAGCGCCAGGAATATCTTTTGATAAAATACCCTTATTTATTTGATCTGTATTAATTACAGCAATTTTATTATTATTATCATTA
 >BOLD:AAP6467|GMOXC9016-15|Canada|Arthropoda|Insecta|Diptera|Sciaridae|Claustropyga|Claustropyga_acanthostyla
@@ -136,7 +113,7 @@ TTTATCTTCTACATTATCTCACTCAGGAGCTTCAGTAGACCTATCTATTTTTTCTTTACATTTAGCCGGTATTTCATCAA
 TCTTTCATCTACTTTATCTCATTCAGGGGCTTCAGTAGATCTTTCTATTTTTTCCCTTCATTTAGCTGGAATTTCTTCAATTTTAGGGGCTGTAAATTTCATTTCAACTATTATTAATATACGGACACCAGGGATATCTTTTGATAAAATGTCTTTATTTATTTGATCGGTATTAATCACGGCCATTCTTTTGCTTTTATCATTA
 ";
         let query_data = parse_query_fasta_str(query_str).unwrap();
-        let result = sintax(&query_data, &lookup_table, &args);
+        let result = sintax(&query_data, &lookup_table, 32, 1.0 / 3.0, 3);
         assert_eq!(
             vec![(
                 &query_data.0[0],
