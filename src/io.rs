@@ -46,6 +46,9 @@ pub struct Args {
     /// Number of output species per query
     #[arg(short = 'm', long, default_value_t = 5, value_parser = positive_usize)]
     pub max_target_seqs: usize,
+    /// If used for mislabling analysis, you want to skip exact sequence matches
+    #[arg(long)]
+    pub skip_exact_matches: bool,
     /// Number of threads
     /// If 0, uses all available threads
     #[arg(short, long, default_value_t = 0, verbatim_doc_comment)]

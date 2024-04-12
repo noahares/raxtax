@@ -92,6 +92,7 @@ fn main() {
         args.num_k_mers,
         args.min_hit_fraction,
         args.max_target_seqs,
+        args.skip_exact_matches,
     );
     match utils::output_results(&result, output, confidence_output, args.min_confidence) {
         Ok(res) => res,
