@@ -1,6 +1,6 @@
 # sintax-ng
 
-This is an implementation of the SINTAX algorithm [[1]](#1).
+This is a modified implementation of the SINTAX algorithm [[1]](#1).
 
 ## Usage
 
@@ -12,8 +12,6 @@ Options:
           Path to the database fasta file
   -i, --query-file <QUERY_FILE>
           Path to the query file
-  -n, --num-iterations <NUM_ITERATIONS>
-          Number of iterations per query [default: 1000]
   -k, --num-k-mers <NUM_K_MERS>
           Number of 8-mers [default: 32]
   -f, --min-hit-fraction <MIN_HIT_FRACTION>
@@ -22,11 +20,8 @@ Options:
           Confidence threshold [default: 0.8]
   -m, --max-target-seqs <MAX_TARGET_SEQS>
           Number of output species per query [default: 5]
-  -e, --early-stop-mse <EARLY_STOP_MSE>
-          The MSE of none-zero values in the hit buffer for early stopping
-          (This should be around 1e-6 to 1e-8 depending on the required accuracy) [default: 0.0000001]
-  -p, --min-iterations <MIN_ITERATIONS>
-          Fraction of iterations to run before checking the MSE [default: 0.1]
+      --skip-exact-matches
+          If used for mislabling analysis, you want to skip exact sequence matches
   -t, --threads <THREADS>
           Number of threads
           If 0, uses all available threads [default: 0]
@@ -36,6 +31,8 @@ Options:
           Output path
   -u, --confidence-output <CONFIDENCE_OUTPUT>
           confidence output path
+  -l, --log-output <LOG_OUTPUT>
+          log output path
       --redo
           Force override of existing output files
   -v, --verbose...
