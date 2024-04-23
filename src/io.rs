@@ -37,9 +37,6 @@ pub struct Args {
     /// Number of 8-mers
     #[arg(short = 'k', long, default_value_t = 32, value_parser = positive_usize)]
     pub num_k_mers: usize,
-    /// 8-mer hit-threshold
-    #[arg(short = 'f', long, default_value_t = 1.0 / 3.0, value_parser = normalized_ratio)]
-    pub min_hit_fraction: f64,
     /// Confidence threshold
     #[arg(short = 'c', long, default_value_t = 0.8, value_parser = normalized_ratio)]
     pub min_confidence: f64,

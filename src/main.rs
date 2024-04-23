@@ -90,7 +90,6 @@ fn main() {
         &query_data,
         &lookup_table,
         args.num_k_mers,
-        args.min_hit_fraction,
         args.max_target_seqs,
         args.skip_exact_matches,
     );

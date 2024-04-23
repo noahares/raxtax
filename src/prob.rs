@@ -3,15 +3,11 @@ use std::collections::HashMap;
 use itertools::Itertools;
 use statrs::function::factorial::binomial;
 
-use crate::utils;
-
 pub fn highest_hit_prob_per_reference(
     total_num_k_mers: usize,
     num_trials: usize,
-    min_success_trials: usize,
     intersection_sizes: &[usize],
 ) -> Vec<f64> {
-    let prob_threshold = 1.0 / 10_u32.pow(utils::F64_OUTPUT_ACCURACY) as f64;
     let intersection_size_counts = intersection_sizes.iter().counts();
     let pmfs: HashMap<usize, Vec<f64>> = intersection_size_counts
         .keys()
@@ -45,7 +41,7 @@ pub fn highest_hit_prob_per_reference(
             )
         })
         .collect();
-    let cmf_prod_components = (min_success_trials..=num_trials)
+    let cmf_prod_components = (0..=num_trials)
         .map(|i| {
             intersection_size_counts
                 .iter()
@@ -65,12 +61,12 @@ pub fn highest_hit_prob_per_reference(
         .map(|(i, v)| {
             (
                 *i,
-                v[min_success_trials..]
+                v
                     .iter()
                     .enumerate()
                     .zip_eq(cmf_prod_components.iter())
                     .map(|((j, pmf), prod_components)| {
-                        let x = cmfs[i][j + min_success_trials];
+                        let x = cmfs[i][j];
                         if x < f64::EPSILON {
                             pmf * prod_components
                         } else {
@@ -84,12 +80,7 @@ pub fn highest_hit_prob_per_reference(
     intersection_sizes
         .iter()
         .map(|&n_intersections| {
-            let prob = highest_hit_probs[&n_intersections];
-            if prob < prob_threshold {
-                0.0
-            } else {
-                prob
-            }
+            highest_hit_probs[&n_intersections]
         })
         .collect_vec()
 }
@@ -135,7 +126,7 @@ mod tests {
     #[test]
     fn test_hit_prob() {
         let probs =
-            highest_hit_prob_per_reference(200, 32, 11, &(0..=200).step_by(10).collect_vec());
+            highest_hit_prob_per_reference(200, 32, &(0..=200).step_by(10).collect_vec());
         let sum = probs.iter().sum::<f64>();
         dbg!(sum);
         let normalized_probs = probs.iter().map(|v| v / sum).collect_vec();
