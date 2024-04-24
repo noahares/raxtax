@@ -29,28 +29,6 @@ pub fn sequence_to_kmers(sequence: &[u8]) -> Vec<u16> {
     k_mers.into_iter().unique().sorted().collect_vec()
 }
 
-pub fn check_convergence(
-    hit_buffer: &[f64],
-    last_hit_buffer: &[f64],
-    iteration: usize,
-    min_contribution: f64,
-    early_stop_mse: f64,
-) -> bool {
-    let relevant_values = hit_buffer
-        .iter()
-        .zip_eq(last_hit_buffer.iter())
-        .filter(|(&v, _)| v / (iteration + 1) as f64 >= min_contribution)
-        .collect_vec();
-    let num_values = relevant_values.len();
-    if num_values == 0 {
-        return true;
-    }
-    let mse = relevant_values.into_iter().fold(0.0, |acc, (&c, &l)| {
-        acc + ((c / (iteration + 1) as f64) - (l / iteration as f64)).powi(2)
-    }) / num_values as f64;
-    mse < early_stop_mse
-}
-
 pub fn get_reader(path: &PathBuf) -> Result<Box<dyn Read>> {
     let file_type = match path.extension() {
         Some(ext) => match ext.to_str() {
@@ -75,7 +53,6 @@ pub fn get_reader(path: &PathBuf) -> Result<Box<dyn Read>> {
 pub fn accumulate_results<'a>(
     lookup_tables: &'a LookupTables,
     hit_buffer: &[f64],
-    cutoff: usize,
 ) -> Option<Vec<(&'a String, Vec<f64>)>> {
     let rounding_factor = 10_u32.pow(F64_OUTPUT_ACCURACY) as f64;
     let mut result_lines: Option<Vec<(&'a String, Vec<f64>)>> = None;
@@ -125,7 +102,6 @@ pub fn accumulate_results<'a>(
         phylum_values[a] = (phylum_values[a] * rounding_factor).round() / rounding_factor;
     }
 
-    let mut out_count = 0_usize;
     for (a, _) in phylum_values
         .iter()
         .enumerate()
@@ -197,10 +173,6 @@ pub fn accumulate_results<'a>(
                             result_lines
                                 .get_or_insert(Vec::new())
                                 .push((label, conf_values));
-                            out_count += 1;
-                            if out_count == cutoff {
-                                return result_lines;
-                            }
                         }
                     }
                 }
@@ -306,7 +278,7 @@ ATACGCTTTGCGT
 ATACGCTTTGCGT";
         let lookup_table = parse_reference_fasta_str(fasta_str).unwrap();
         let hit_buffer = [1.0 / 8.0, 2.0 / 8.0, 0.0, 2.0 / 8.0, 3.0 / 8.0];
-        let results = accumulate_results(&lookup_table, &hit_buffer, 4);
+        let results = accumulate_results(&lookup_table, &hit_buffer);
         assert_eq!(
             results,
             Some(vec![

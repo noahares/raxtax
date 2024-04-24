@@ -61,8 +61,7 @@ pub fn highest_hit_prob_per_reference(
         .map(|(i, v)| {
             (
                 *i,
-                v
-                    .iter()
+                v.iter()
                     .enumerate()
                     .zip_eq(cmf_prod_components.iter())
                     .map(|((j, pmf), prod_components)| {
@@ -79,9 +78,7 @@ pub fn highest_hit_prob_per_reference(
         .collect();
     intersection_sizes
         .iter()
-        .map(|&n_intersections| {
-            highest_hit_probs[&n_intersections]
-        })
+        .map(|&n_intersections| highest_hit_probs[&n_intersections])
         .collect_vec()
 }
 
@@ -125,8 +122,7 @@ mod tests {
 
     #[test]
     fn test_hit_prob() {
-        let probs =
-            highest_hit_prob_per_reference(200, 32, &(0..=200).step_by(10).collect_vec());
+        let probs = highest_hit_prob_per_reference(200, 32, &(0..=200).step_by(10).collect_vec());
         let sum = probs.iter().sum::<f64>();
         dbg!(sum);
         let normalized_probs = probs.iter().map(|v| v / sum).collect_vec();

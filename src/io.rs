@@ -40,9 +40,6 @@ pub struct Args {
     /// Confidence threshold
     #[arg(short = 'c', long, default_value_t = 0.8, value_parser = normalized_ratio)]
     pub min_confidence: f64,
-    /// Number of output species per query
-    #[arg(short = 'm', long, default_value_t = 5, value_parser = positive_usize)]
-    pub max_target_seqs: usize,
     /// If used for mislabling analysis, you want to skip exact sequence matches
     #[arg(long)]
     pub skip_exact_matches: bool,
@@ -53,15 +50,9 @@ pub struct Args {
     /// Seed
     #[arg(short, long, default_value_t = 42)]
     pub seed: u64,
-    /// Output path
-    #[arg(short, long)]
-    pub output: Option<PathBuf>,
-    /// confidence output path
-    #[arg(short = 'u', long)]
-    pub confidence_output: Option<PathBuf>,
-    /// log output path
-    #[arg(short = 'l', long)]
-    pub log_output: Option<PathBuf>,
+    /// Output prefix
+    #[arg(short = 'o', long)]
+    pub prefix: Option<PathBuf>,
     /// Force override of existing output files
     #[arg(long)]
     pub redo: bool,
@@ -70,34 +61,21 @@ pub struct Args {
 }
 
 impl Args {
-    pub fn get_output(&self) -> Result<Box<dyn Write>> {
-        let path = self
-            .output
-            .clone()
-            .unwrap_or(self.query_file.with_extension("sintax.out"));
-        if path.is_file() && !self.redo {
-            bail!("Output file {} already exists! Please specify another file with -o <PATH> or run with --redo to force overriding existing files!", path.display());
+    pub fn get_output(&self) -> Result<(Box<dyn Write>, Box<dyn Write>, Box<dyn Write + Send>)> {
+        let prefix = self.prefix.clone().unwrap_or(self.query_file.clone().with_extension("out"));
+        if prefix.is_dir() && !self.redo {
+            bail!("Output folder {} already exists! Please specify another folder with -o <PATH> or run with --redo to force overriding existing files!", prefix.display());
         }
-        Ok(std::fs::File::create(path).map(|f| Box::new(f) as Box<dyn Write>)?)
-    }
-    pub fn get_confidence_output(&self) -> Result<Box<dyn Write>> {
-        let path = self.confidence_output.clone().unwrap_or(
-            self.query_file
-                .with_extension(format!("sintax.conf{}.out", self.min_confidence)),
-        );
-        if path.is_file() && !self.redo {
-            bail!("Output file {} already exists! Please specify another file with -u <PATH> or run with --redo to force overriding existing files!", path.display());
-        }
-        Ok(std::fs::File::create(path).map(|f| Box::new(f) as Box<dyn Write>)?)
-    }
-    pub fn get_log_output(&self) -> Result<Box<dyn Write + Send>> {
-        let path = self
-            .log_output
-            .clone()
-            .unwrap_or(self.query_file.with_extension("sintax.log"));
-        if path.is_file() && !self.redo {
-            bail!("Output file {} already exists! Please specify another file with -l <PATH> or run with --redo to force overriding existing files!", path.display());
-        }
-        Ok(std::fs::File::create(path).map(|f| Box::new(f) as Box<dyn Write + Send>)?)
+        std::fs::create_dir_all(&prefix)?;
+        let result_output = prefix.join("sintax_ng.out");
+        let confidence_output =
+            prefix.join(format!("sintax_ng.confidence{}.out", self.min_confidence));
+        let log_output = prefix.join("sintax_ng.log");
+        Ok((
+            std::fs::File::create(result_output).map(|f| Box::new(f) as Box<dyn Write + Send>)?,
+            std::fs::File::create(confidence_output)
+                .map(|f| Box::new(f) as Box<dyn Write + Send>)?,
+            std::fs::File::create(log_output).map(|f| Box::new(f) as Box<dyn Write + Send>)?,
+        ))
     }
 }

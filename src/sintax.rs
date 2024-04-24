@@ -11,7 +11,6 @@ pub fn sintax<'a, 'b>(
     (query_labels, query_sequences): &'b (Vec<String>, Vec<Vec<u8>>),
     lookup_table: &'a LookupTables,
     num_k_mers: usize,
-    max_target_seqs: usize,
     skip_exact_matches: bool,
 ) -> Vec<(&'b String, Option<Vec<(&'a String, Vec<f64>)>>)> {
     query_labels
@@ -48,7 +47,6 @@ pub fn sintax<'a, 'b>(
                                         vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0 / label_idxs.len() as f64],
                                     )
                                 })
-                                .take(max_target_seqs)
                                 .collect_vec(),
                         ),
                     );
@@ -86,7 +84,7 @@ pub fn sintax<'a, 'b>(
             (
                 i,
                 query_label,
-                utils::accumulate_results(lookup_table, &hit_buffer, max_target_seqs),
+                utils::accumulate_results(lookup_table, &hit_buffer),
             )
         })
         .collect::<Vec<(usize, &String, Option<Vec<(&String, Vec<f64>)>>)>>()
@@ -120,7 +118,7 @@ TTTATCTTCTACATTATCTCACTCAGGAGCTTCAGTAGACCTATCTATTTTTTCTTTACATTTAGCCGGTATTTCATCAA
 TCTTTCATCTACTTTATCTCATTCAGGGGCTTCAGTAGATCTTTCTATTTTTTCCCTTCATTTAGCTGGAATTTCTTCAATTTTAGGGGCTGTAAATTTCATTTCAACTATTATTAATATACGGACACCAGGGATATCTTTTGATAAAATGTCTTTATTTATTTGATCGGTATTAATCACGGCCATTCTTTTGCTTTTATCATTA
 ";
         let query_data = parse_query_fasta_str(query_str).unwrap();
-        let result = sintax(&query_data, &lookup_table, 32, 3, false);
+        let result = sintax(&query_data, &lookup_table, 32, false);
         assert_eq!(
             vec![(
                 &query_data.0[0],

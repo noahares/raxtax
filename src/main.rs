@@ -12,8 +12,8 @@ use sintax_ng::utils;
 
 fn main() {
     let args = io::Args::parse();
-    let log_output = match args.get_log_output() {
-        Ok(output) => output,
+    let (output, confidence_output, log_output) = match args.get_output() {
+        Ok((output, confidence_output, log_output)) => (output, confidence_output, log_output),
         Err(e) => {
             if args.verbosity.log_level_filter() >= Level::Error {
                 eprintln!("\x1b[31m[ERROR]\x1b[0m {}", e);
@@ -27,26 +27,6 @@ fn main() {
         .format_timestamp(None)
         .format_target(false)
         .init();
-    let output = match args.get_output() {
-        Ok(output) => output,
-        Err(e) => {
-            error!("{}", e);
-            if log_enabled!(Level::Error) {
-                eprintln!("\x1b[31m[ERROR]\x1b[0m {}", e);
-            }
-            exit(exitcode::CANTCREAT);
-        }
-    };
-    let confidence_output = match args.get_confidence_output() {
-        Ok(output) => output,
-        Err(e) => {
-            error!("{}", e);
-            if log_enabled!(Level::Error) {
-                eprintln!("\x1b[31m[ERROR]\x1b[0m {}", e);
-            }
-            exit(exitcode::CANTCREAT);
-        }
-    };
     if let Err(e) = rayon::ThreadPoolBuilder::new()
         .num_threads(args.threads)
         .build_global()
@@ -90,7 +70,6 @@ fn main() {
         &query_data,
         &lookup_table,
         args.num_k_mers,
-        args.max_target_seqs,
         args.skip_exact_matches,
     );
     match utils::output_results(&result, output, confidence_output, args.min_confidence) {
