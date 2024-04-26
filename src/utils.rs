@@ -13,6 +13,7 @@ use crate::parser::LookupTables;
 use anyhow::{bail, Result};
 
 pub const F64_OUTPUT_ACCURACY: u32 = 2;
+const MIN_CLASS_CONFIDENCE: f64 = 0.8;
 
 pub fn sequence_to_kmers(sequence: &[u8]) -> Vec<u16> {
     let mut k_mer: u16 = 0;
@@ -115,7 +116,7 @@ pub fn accumulate_results<'a>(
             .enumerate()
             .sorted_by(|a, b| class_values[*b.1].partial_cmp(&class_values[*a.1]).unwrap())
         {
-            if class_values[*b] == 0.0 {
+            if class_values[*b] < MIN_CLASS_CONFIDENCE {
                 break;
             }
             for (_, c) in lookup_tables.level_hierarchy_maps[1][*b]
