@@ -1,3 +1,5 @@
+use std::sync::atomic::AtomicBool;
+
 use crate::parser::LookupTables;
 use crate::{prob, utils};
 use indicatif::{ParallelProgressIterator, ProgressStyle};
@@ -13,7 +15,8 @@ pub fn sintax<'a, 'b>(
     num_k_mers: usize,
     skip_exact_matches: bool,
 ) -> Vec<(&'b String, Option<Vec<(&'a String, Vec<f64>)>>)> {
-    query_labels
+    let warnings = AtomicBool::new(false);
+    let results = query_labels
         .par_iter()
         .zip_eq(query_sequences.par_iter())
         .enumerate()
@@ -31,9 +34,7 @@ pub fn sintax<'a, 'b>(
                     debug!("Exact sequence match for query {query_label}");
                     if !label_idxs.iter().map(|&idx| lookup_table.labels[idx].split('|').take(5).join("|")).all_equal() {
                         warn!("Exact matches for {query_label} differ above the species level! Confidence values will be wrong!");
-                        if log_enabled!(Level::Warn) {
-                        eprintln!("\x1b[33m[WARN ]\x1b[0m Exact matches for {query_label} differ above the species level! Confidence values will be wrong!");
-                        }
+                        warnings.store(true, std::sync::atomic::Ordering::Relaxed);
                     }
                     return (
                         i,
@@ -91,7 +92,12 @@ pub fn sintax<'a, 'b>(
         .into_iter()
         .sorted_by_key(|(i, _, _)| *i)
         .map(|(_, q, v)| (q, v))
-        .collect_vec()
+        .collect_vec();
+
+        if warnings.into_inner() && log_enabled!(Level::Warn) {
+        eprintln!("\x1b[33m[WARN ]\x1b[0m Exact matches for some queries differ above the species level! Check the log file for more information!");
+        }
+        results
 }
 
 #[cfg(test)]
