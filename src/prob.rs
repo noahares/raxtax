@@ -1,8 +1,10 @@
-use std::collections::HashMap;
+use ahash::HashMap;
 
 use itertools::Itertools;
+use logging_timer::time;
 use statrs::function::factorial::binomial;
 
+#[time("debug")]
 pub fn highest_hit_prob_per_reference(
     total_num_k_mers: usize,
     num_trials: usize,
@@ -46,8 +48,8 @@ pub fn highest_hit_prob_per_reference(
             intersection_size_counts
                 .iter()
                 .map(|(&&size, &count)| {
-                    let x = cmfs[&size][i];
-                    if x < f64::EPSILON {
+                    let x = unsafe { *cmfs[&size].get_unchecked(i) };
+                    if x == 0.0 {
                         1.0
                     } else {
                         x.powi(count as i32)
@@ -65,8 +67,8 @@ pub fn highest_hit_prob_per_reference(
                     .enumerate()
                     .zip_eq(cmf_prod_components.iter())
                     .map(|((j, pmf), prod_components)| {
-                        let x = cmfs[i][j];
-                        if x < f64::EPSILON {
+                        let x = unsafe { *cmfs[i].get_unchecked(j) };
+                        if x == 0.0 {
                             pmf * prod_components
                         } else {
                             pmf * prod_components / x

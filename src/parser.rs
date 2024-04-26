@@ -6,10 +6,8 @@ use logging_timer::{time, timer};
 use rayon::prelude::*;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{HashMap, HashSet},
-    path::PathBuf,
-};
+use ahash::{HashMap, HashSet, HashSetExt, HashMapExt};
+use std::path::PathBuf;
 
 use crate::utils;
 
