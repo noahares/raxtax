@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use indicatif::{ProgressIterator, ProgressStyle};
 use itertools::Itertools;
-use log::{debug, Level};
+use log::{info, Level};
 use logging_timer::{time, timer};
 use rayon::prelude::*;
 use regex::Regex;
@@ -132,23 +132,18 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
         (ordered_labels, sequence_map)
     };
 
-    // debug!(
-    //     "Average number of sequences per kmer: {}",
-    //     k_mer_map.iter().map(|e| e.len() as f64).sum::<f64>() / k_mer_map.len() as f64
-    // );
-
     // create mapping to index for each taxonomical level
     let level_name_maps = level_sets
         .into_iter()
         .map(|set| set.into_iter().sorted().collect_vec())
         .collect::<Vec<Vec<String>>>();
-    debug!("Unique Phyla: {}", level_name_maps[0].len());
-    debug!("Unique Classes: {}", level_name_maps[1].len());
-    debug!("Unique Orders: {}", level_name_maps[2].len());
-    debug!("Unique Families: {}", level_name_maps[3].len());
-    debug!("Unique Genus: {}", level_name_maps[4].len());
-    debug!("Unique Species: {}", level_name_maps[5].len());
-    debug!("Unique Sequences: {}", labels.len());
+    info!("Unique Phyla: {}", level_name_maps[0].len());
+    info!("Unique Classes: {}", level_name_maps[1].len());
+    info!("Unique Orders: {}", level_name_maps[2].len());
+    info!("Unique Families: {}", level_name_maps[3].len());
+    info!("Unique Genus: {}", level_name_maps[4].len());
+    info!("Unique Species: {}", level_name_maps[5].len());
+    info!("Unique Sequences: {}", labels.len());
     // need reverse mapping for second parsing of labels and sequences to build data structure
     let level_rev_maps = level_name_maps
         .iter()

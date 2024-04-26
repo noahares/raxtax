@@ -4,7 +4,7 @@ use crate::parser::LookupTables;
 use crate::{prob, utils};
 use indicatif::{ParallelProgressIterator, ProgressStyle};
 use itertools::Itertools;
-use log::{debug, log_enabled, warn, Level};
+use log::{info, log_enabled, warn, Level};
 use logging_timer::{time, timer};
 use rayon::prelude::*;
 
@@ -31,7 +31,7 @@ pub fn sintax<'a, 'b>(
         .map(|(i, (query_label, query_sequence))| {
             if !skip_exact_matches {
                 if let Some(label_idxs) = lookup_table.sequences.get(query_sequence) {
-                    debug!("Exact sequence match for query {query_label}");
+                    info!("Exact sequence match for query {query_label}");
                     if !label_idxs.iter().map(|&idx| lookup_table.labels[idx].split('|').take(5).join("|")).all_equal() {
                         warn!("Exact matches for {query_label} differ above the species level! Confidence values will be wrong!");
                         warnings.store(true, std::sync::atomic::Ordering::Relaxed);
