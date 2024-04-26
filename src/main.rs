@@ -69,7 +69,6 @@ fn main() {
     let result = sintax(
         &query_data,
         &lookup_table,
-        args.num_k_mers,
         args.skip_exact_matches,
     );
     match utils::output_results(&result, output, confidence_output, args.min_confidence) {

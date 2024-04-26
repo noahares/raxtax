@@ -14,17 +14,6 @@ fn normalized_ratio(s: &str) -> Result<f64> {
     }
 }
 
-fn positive_usize(s: &str) -> Result<usize> {
-    let value: usize = s
-        .parse()
-        .with_context(|| format!("`{s}` isn't a valid usize"))?;
-    if value > 0 {
-        Ok(value)
-    } else {
-        bail!("Value should be positive")
-    }
-}
-
 #[derive(Parser)]
 #[command(author, version, about)]
 pub struct Args {
@@ -34,9 +23,6 @@ pub struct Args {
     /// Path to the query file
     #[arg(short = 'i', long)]
     pub query_file: PathBuf,
-    /// Number of 8-mers
-    #[arg(short = 'k', long, default_value_t = 32, value_parser = positive_usize)]
-    pub num_k_mers: usize,
     /// Confidence threshold
     #[arg(short = 'c', long, default_value_t = 0.8, value_parser = normalized_ratio)]
     pub min_confidence: f64,

@@ -12,7 +12,6 @@ use rayon::prelude::*;
 pub fn sintax<'a, 'b>(
     (query_labels, query_sequences): &'b (Vec<String>, Vec<Vec<u8>>),
     lookup_table: &'a LookupTables,
-    num_k_mers: usize,
     skip_exact_matches: bool,
 ) -> Vec<(&'b String, Option<Vec<(&'a String, Vec<f64>)>>)> {
     let warnings = AtomicBool::new(false);
@@ -57,6 +56,7 @@ pub fn sintax<'a, 'b>(
             let mut hit_buffer: Vec<f64> = vec![0.0; lookup_table.level_hierarchy_maps[5].len()];
             let _tmr = timer!(Level::Debug; "Query Time");
             let k_mers = utils::sequence_to_kmers(query_sequence);
+            let num_trials = query_sequence.len() / 2;
             k_mers
                 .iter()
                 .for_each(|query_kmer| {
@@ -71,7 +71,7 @@ pub fn sintax<'a, 'b>(
                     exact_matches.iter().for_each(|&id| unsafe { *intersect_buffer.get_unchecked_mut(id) = 0 });
                 }
             }
-            let higest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len(), num_k_mers, &intersect_buffer);
+            let higest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len(), num_trials, &intersect_buffer);
             let probs_sum: f64 = higest_hit_probs.iter().sum();
             if probs_sum > 0.0 {
                 higest_hit_probs.iter().enumerate().for_each(|(idx, &v)| {
@@ -124,7 +124,7 @@ TTTATCTTCTACATTATCTCACTCAGGAGCTTCAGTAGACCTATCTATTTTTTCTTTACATTTAGCCGGTATTTCATCAA
 TCTTTCATCTACTTTATCTCATTCAGGGGCTTCAGTAGATCTTTCTATTTTTTCCCTTCATTTAGCTGGAATTTCTTCAATTTTAGGGGCTGTAAATTTCATTTCAACTATTATTAATATACGGACACCAGGGATATCTTTTGATAAAATGTCTTTATTTATTTGATCGGTATTAATCACGGCCATTCTTTTGCTTTTATCATTA
 ";
         let query_data = parse_query_fasta_str(query_str).unwrap();
-        let result = sintax(&query_data, &lookup_table, 32, false);
+        let result = sintax(&query_data, &lookup_table, false);
         assert_eq!(
             vec![(
                 &query_data.0[0],
