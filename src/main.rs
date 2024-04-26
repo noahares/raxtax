@@ -66,11 +66,7 @@ fn main() {
             exit(exitcode::NOINPUT);
         }
     };
-    let result = sintax(
-        &query_data,
-        &lookup_table,
-        args.skip_exact_matches,
-    );
+    let result = sintax(&query_data, &lookup_table, args.skip_exact_matches);
     match utils::output_results(&result, output, confidence_output, args.min_confidence) {
         Ok(res) => res,
         Err(e) => {

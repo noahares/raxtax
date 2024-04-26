@@ -1,3 +1,4 @@
+use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use anyhow::{bail, Context, Result};
 use indicatif::{ProgressIterator, ProgressStyle};
 use itertools::Itertools;
@@ -6,7 +7,6 @@ use logging_timer::{time, timer};
 use rayon::prelude::*;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use ahash::{HashMap, HashSet, HashSetExt, HashMapExt};
 use std::path::PathBuf;
 
 use crate::utils;

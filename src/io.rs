@@ -48,7 +48,10 @@ pub struct Args {
 
 impl Args {
     pub fn get_output(&self) -> Result<(Box<dyn Write>, Box<dyn Write>, Box<dyn Write + Send>)> {
-        let prefix = self.prefix.clone().unwrap_or(self.query_file.clone().with_extension("out"));
+        let prefix = self
+            .prefix
+            .clone()
+            .unwrap_or(self.query_file.clone().with_extension("out"));
         if prefix.is_dir() && !self.redo {
             bail!("Output folder {} already exists! Please specify another folder with -o <PATH> or run with --redo to force overriding existing files!", prefix.display());
         }

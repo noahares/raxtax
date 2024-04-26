@@ -94,10 +94,10 @@ pub fn sintax<'a, 'b>(
         .map(|(_, q, v)| (q, v))
         .collect_vec();
 
-        if warnings.into_inner() && log_enabled!(Level::Warn) {
+    if warnings.into_inner() && log_enabled!(Level::Warn) {
         eprintln!("\x1b[33m[WARN ]\x1b[0m Exact matches for some queries differ above the species level! Check the log file for more information!");
-        }
-        results
+    }
+    results
 }
 
 #[cfg(test)]
