@@ -305,7 +305,7 @@ pub fn output_results_tsv(
                         })
                         .join("\n")
                 }
-                None => format!("{}\tNA\t{}", query_label, sequence),
+                None => format!("{}\t{}\t{}", query_label, ["NA"; 12].join("\t"), sequence),
             },
         )
         .collect_vec();
