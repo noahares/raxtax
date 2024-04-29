@@ -29,6 +29,9 @@ pub struct Args {
     /// If used for mislabling analysis, you want to skip exact sequence matches
     #[arg(long)]
     pub skip_exact_matches: bool,
+    /// Output primary result file in tsv format
+    #[arg(long)]
+    pub tsv: bool,
     /// Number of threads
     /// If 0, uses all available threads
     #[arg(short, long, default_value_t = 0, verbatim_doc_comment)]
@@ -47,7 +50,14 @@ pub struct Args {
 }
 
 impl Args {
-    pub fn get_output(&self) -> Result<(Box<dyn Write>, Box<dyn Write>, Box<dyn Write + Send>)> {
+    pub fn get_output(
+        &self,
+    ) -> Result<(
+        Box<dyn Write>,
+        Option<Box<dyn Write>>,
+        Box<dyn Write>,
+        Box<dyn Write + Send>,
+    )> {
         let prefix = self
             .prefix
             .clone()
@@ -57,13 +67,21 @@ impl Args {
         }
         std::fs::create_dir_all(&prefix)?;
         let result_output = prefix.join("sintax_ng.out");
+        let tsv_output = if self.tsv {
+            Some(
+                std::fs::File::create(prefix.join("sintax_ng.tsv"))
+                    .map(|f| Box::new(f) as Box<dyn Write>)?,
+            )
+        } else {
+            None
+        };
         let confidence_output =
             prefix.join(format!("sintax_ng.confidence{}.out", self.min_confidence));
         let log_output = prefix.join("sintax_ng.log");
         Ok((
-            std::fs::File::create(result_output).map(|f| Box::new(f) as Box<dyn Write + Send>)?,
-            std::fs::File::create(confidence_output)
-                .map(|f| Box::new(f) as Box<dyn Write + Send>)?,
+            std::fs::File::create(result_output).map(|f| Box::new(f) as Box<dyn Write>)?,
+            tsv_output,
+            std::fs::File::create(confidence_output).map(|f| Box::new(f) as Box<dyn Write>)?,
             std::fs::File::create(log_output).map(|f| Box::new(f) as Box<dyn Write + Send>)?,
         ))
     }

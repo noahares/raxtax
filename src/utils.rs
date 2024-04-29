@@ -259,6 +259,59 @@ pub fn output_results(
     Ok(())
 }
 
+pub fn decompress_sequences(sequences: &[Vec<u8>]) -> Vec<String> {
+    sequences
+        .iter()
+        .map(|s| {
+            s.iter()
+                .map(|c| match c {
+                    0b00 => 'A',
+                    0b01 => 'C',
+                    0b10 => 'G',
+                    0b11 => 'T',
+                    _ => '-',
+                })
+                .join("")
+        })
+        .collect_vec()
+}
+
+pub fn output_results_tsv(
+    results: &[(&String, Option<Vec<(&String, Vec<f64>)>>)],
+    sequences: Vec<String>,
+    mut output: Box<dyn Write>,
+) -> Result<()> {
+    let output_lines: Vec<String> = results
+        .iter()
+        .zip_eq(sequences)
+        .map(
+            |((query_label, confidence_vec), sequence)| match confidence_vec {
+                Some(c) => {
+                    c.iter()
+                        .map(|(label, values)| {
+                            format!(
+                                "{}\t{}\t{}",
+                                query_label,
+                                label
+                                    .split('|')
+                                    .map(|s| s.to_string())
+                                    .interleave(values.iter().map(|v| format!(
+                                        "{1:.0$}",
+                                        F64_OUTPUT_ACCURACY as usize, v
+                                    )))
+                                    .join("\t"),
+                                sequence
+                            )
+                        })
+                        .join("\n")
+                }
+                None => format!("{}\tNA\t{}", query_label, sequence),
+            },
+        )
+        .collect_vec();
+    writeln!(output, "{}", output_lines.into_iter().join("\n"))?;
+    Ok(())
+}
 #[cfg(test)]
 mod tests {
     use crate::parser::parse_reference_fasta_str;

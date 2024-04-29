@@ -12,8 +12,10 @@ use sintax_ng::utils;
 
 fn main() {
     let args = io::Args::parse();
-    let (output, confidence_output, log_output) = match args.get_output() {
-        Ok((output, confidence_output, log_output)) => (output, confidence_output, log_output),
+    let (output, tsv_output, confidence_output, log_output) = match args.get_output() {
+        Ok((output, tsv_output, confidence_output, log_output)) => {
+            (output, tsv_output, confidence_output, log_output)
+        }
         Err(e) => {
             if args.verbosity.log_level_filter() >= Level::Error {
                 eprintln!("\x1b[31m[ERROR]\x1b[0m {}", e);
@@ -67,6 +69,22 @@ fn main() {
         }
     };
     let result = sintax(&query_data, &lookup_table, args.skip_exact_matches);
+    if let Some(tsv_output) = tsv_output {
+        let sequences: Vec<String> = utils::decompress_sequences(&query_data.1);
+        match utils::output_results_tsv(&result, sequences, tsv_output) {
+            Ok(res) => res,
+            Err(e) => {
+                error!("Failed to write results to files: {}", e);
+                if log_enabled!(Level::Error) {
+                    eprintln!(
+                        "\x1b[31m[ERROR]\x1b[0m Failed to write results to files: {}",
+                        e
+                    );
+                }
+                exit(exitcode::IOERR);
+            }
+        };
+    }
     match utils::output_results(&result, output, confidence_output, args.min_confidence) {
         Ok(res) => res,
         Err(e) => {
