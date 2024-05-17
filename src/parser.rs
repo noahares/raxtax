@@ -175,6 +175,23 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
         level_hierarchy_maps[5][species_idx].insert(i);
     });
 
+    for (map, lm) in level_hierarchy_maps.iter().zip(level_name_maps[1..].iter()) {
+        if map.iter().fold(0, |acc, m| acc + m.len()) > lm.len() {
+            let problematic_sequences = map
+                .iter()
+                .map(|m| m.iter().collect_vec())
+                .concat()
+                .into_iter()
+                .duplicates()
+                .map(|&i| lm[i].clone())
+                .join(", ");
+            bail!(
+                "Found inconsistent taxonomic lineages containing: {}",
+                problematic_sequences
+            );
+        }
+    }
+
     let mut sequence_species_map = vec![0; labels.len()];
     for (species_id, sequences) in level_hierarchy_maps[5].iter().enumerate() {
         for sequence_id in sequences {
