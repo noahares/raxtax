@@ -56,7 +56,7 @@ pub fn raxtax<'a, 'b>(
             let mut hit_buffer: Vec<f64> = vec![0.0; lookup_table.level_hierarchy_maps[5].len()];
             let _tmr = timer!(Level::Debug; "Query Time");
             let k_mers = utils::sequence_to_kmers(query_sequence);
-            let num_trials = query_sequence.len() / 2;
+            let num_trials = (query_sequence.len() / 2).min(128);
             k_mers
                 .iter()
                 .for_each(|query_kmer| {
