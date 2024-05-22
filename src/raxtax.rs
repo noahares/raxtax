@@ -9,7 +9,7 @@ use logging_timer::{time, timer};
 use rayon::prelude::*;
 
 #[time("info")]
-pub fn sintax<'a, 'b>(
+pub fn raxtax<'a, 'b>(
     (query_labels, query_sequences): &'b (Vec<String>, Vec<Vec<u8>>),
     lookup_table: &'a LookupTables,
     skip_exact_matches: bool,
@@ -105,10 +105,10 @@ mod tests {
 
     use crate::parser::{parse_query_fasta_str, parse_reference_fasta_str};
 
-    use super::sintax;
+    use super::raxtax;
 
     #[test]
-    fn test_sintax() {
+    fn test_raxtax() {
         let fasta_str = r">BOLD:AAP6467|SSBAE436-13|Canada|Arthropoda|Insecta|Diptera|Sciaridae|Claustropyga|Claustropyga_acanthostyla
 TTTATCTTCTACATTATCTCACTCAGGGGCTTCAGTAGATCTATCTATTTTTTCTTTACATTTAGCAGGTATTTCATCAATTTTAGGAGCTGTAAATTTTATTTCTACTATTATTAATATACGAGCGCCAGGAATATCTTTTGATAAAATACCCTTATTTATTTGATCTGTATTAATTACAGCAATTTTATTATTATTATCATTA
 >BOLD:AAP6467|GMOXC9016-15|Canada|Arthropoda|Insecta|Diptera|Sciaridae|Claustropyga|Claustropyga_acanthostyla
@@ -124,7 +124,7 @@ TTTATCTTCTACATTATCTCACTCAGGAGCTTCAGTAGACCTATCTATTTTTTCTTTACATTTAGCCGGTATTTCATCAA
 TCTTTCATCTACTTTATCTCATTCAGGGGCTTCAGTAGATCTTTCTATTTTTTCCCTTCATTTAGCTGGAATTTCTTCAATTTTAGGGGCTGTAAATTTCATTTCAACTATTATTAATATACGGACACCAGGGATATCTTTTGATAAAATGTCTTTATTTATTTGATCGGTATTAATCACGGCCATTCTTTTGCTTTTATCATTA
 ";
         let query_data = parse_query_fasta_str(query_str).unwrap();
-        let result = sintax(&query_data, &lookup_table, false);
+        let result = raxtax(&query_data, &lookup_table, false);
         assert_eq!(
             vec![(
                 &query_data.0[0],

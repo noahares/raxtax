@@ -5,10 +5,10 @@ use log::error;
 use log::log_enabled;
 use log::Level;
 use logging_timer::timer;
-use sintax_ng::io;
-use sintax_ng::parser;
-use sintax_ng::sintax::sintax;
-use sintax_ng::utils;
+use raxtax::io;
+use raxtax::parser;
+use raxtax::raxtax::raxtax;
+use raxtax::utils;
 
 fn main() {
     let args = io::Args::parse();
@@ -68,7 +68,7 @@ fn main() {
             exit(exitcode::NOINPUT);
         }
     };
-    let result = sintax(&query_data, &lookup_table, args.skip_exact_matches);
+    let result = raxtax(&query_data, &lookup_table, args.skip_exact_matches);
     if let Some(tsv_output) = tsv_output {
         let sequences: Vec<String> = utils::decompress_sequences(&query_data.1);
         match utils::output_results_tsv(&result, sequences, tsv_output) {

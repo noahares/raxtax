@@ -66,18 +66,18 @@ impl Args {
             bail!("Output folder {} already exists! Please specify another folder with -o <PATH> or run with --redo to force overriding existing files!", prefix.display());
         }
         std::fs::create_dir_all(&prefix)?;
-        let result_output = prefix.join("sintax_ng.out");
+        let result_output = prefix.join("raxtax.out");
         let tsv_output = if self.tsv {
             Some(
-                std::fs::File::create(prefix.join("sintax_ng.tsv"))
+                std::fs::File::create(prefix.join("raxtax.tsv"))
                     .map(|f| Box::new(f) as Box<dyn Write>)?,
             )
         } else {
             None
         };
         let confidence_output =
-            prefix.join(format!("sintax_ng.confidence{}.out", self.min_confidence));
-        let log_output = prefix.join("sintax_ng.log");
+            prefix.join(format!("raxtax.confidence{}.out", self.min_confidence));
+        let log_output = prefix.join("raxtax.log");
         Ok((
             std::fs::File::create(result_output).map(|f| Box::new(f) as Box<dyn Write>)?,
             tsv_output,
