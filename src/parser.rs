@@ -71,6 +71,9 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
                             "Unexpected taxonomical annotation detected in {}",
                             label
                         ))?;
+                    if pieces.iter().any(|s| s.contains('|')) {
+                        bail!("Character '|' not allowed in sequence labels")
+                    }
                     labels.push(pieces.join("|"));
                     if !current_sequence.is_empty() {
                         sequences.push(current_sequence.clone());
