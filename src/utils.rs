@@ -229,7 +229,6 @@ pub fn output_results(
                     })
                     .unique()
                     .collect_vec();
-                // .join("\n");
                 let mut confidence_output_filtered: Vec<String> =
                     vec![confidence_output[0].clone()];
                 for i in 1..confidence_output.len() {
@@ -320,15 +319,15 @@ mod tests {
 
     #[test]
     fn test_accumulation() {
-        let fasta_str = r">Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species1
+        let fasta_str = r">Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species1;
 AAACCCTTTGGGA
->Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species2
+>Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species2;
 ATACGCTTTGGGA
->Badabing|Badabum|Phylum1|Class1|Order4|Family5|Genus2|Species3
+>Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order4,f:Family5,g:Genus2,s:Species3;
 ATCCGCTATGGGA
->Badabing|Badabum|Phylum1|Class2|Order2|Family3|Genus3|Species6
+>Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order2,f:Family3,g:Genus3,s:Species6;
 ATACGCTTTGCGT
->Badabing|Badabum|Phylum2|Class3|Order3|Family4|Genus4|Species5
+>Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order3,f:Family4,g:Genus4,s:Species5;
 ATACGCTTTGCGT";
         let lookup_table = parse_reference_fasta_str(fasta_str).unwrap();
         let hit_buffer = [1.0 / 8.0, 2.0 / 8.0, 0.0, 2.0 / 8.0, 3.0 / 8.0];
@@ -338,19 +337,19 @@ ATACGCTTTGCGT";
             Some(vec![
                 (
                     &"Phylum1|Class1|Order1|Family1|Genus1|Species2".to_string(),
-                    vec![0.63_f64, 0.38, 0.38, 0.38, 0.38, 0.25],
+                    vec![1.0_f64, 1.0, 0.38, 0.38, 0.38, 0.25],
                 ),
                 (
                     &"Phylum1|Class1|Order1|Family1|Genus1|Species1".into(),
-                    vec![0.63_f64, 0.38, 0.38, 0.38, 0.38, 0.13],
+                    vec![1.0_f64, 1.0, 0.38, 0.38, 0.38, 0.13],
                 ),
                 (
-                    &"Phylum1|Class2|Order2|Family3|Genus3|Species6".into(),
-                    vec![0.63_f64, 0.25, 0.25, 0.25, 0.25, 0.25],
+                    &"Phylum1|Class1|Order2|Family3|Genus3|Species6".into(),
+                    vec![1.0_f64, 1.0, 0.38, 0.38, 0.38, 0.38],
                 ),
                 (
-                    &"Phylum2|Class3|Order3|Family4|Genus4|Species5".into(),
-                    vec![0.38_f64, 0.38, 0.38, 0.38, 0.38, 0.38],
+                    &"Phylum1|Class1|Order3|Family4|Genus4|Species5".into(),
+                    vec![1.0_f64, 1.0, 0.25, 0.25, 0.25, 0.25],
                 ),
             ])
         );

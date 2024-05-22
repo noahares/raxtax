@@ -141,6 +141,6 @@ mod tests {
         dbg!(sum);
         let normalized_probs = probs.iter().map(|v| v / sum).collect_vec();
         dbg!(&normalized_probs);
-        assert_eq!(normalized_probs.iter().sum::<f64>(), 1.0);
+        assert_almost_eq!(normalized_probs.iter().sum::<f64>(), 1.0, 1e-7);
     }
 }

@@ -276,17 +276,17 @@ mod tests {
 
     #[test]
     fn test_str_parser() {
-        let fasta_str = r">Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species1
+        let fasta_str = r">Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species1;
 AAACCCTTTGGGA
->Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species2
+>Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species2;
 ATACGCTTTGGGA
->Badabing|Badabum|Phylum1|Class1|Order4|Family5|Genus2|Species3
+>Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order4,f:Family5,g:Genus2,s:Species3;
 ATCCGCTATGGGA
->Badabing|Badabum|Phylum1|Class2|Order2|Family3|Genus3|Species6
+>Badabing|Badabum;tax=p:Phylum1,c:Class2,o:Order2,f:Family3,g:Genus3,s:Species6;
 ATACGCTTTGCGT
->Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species2
+>Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species2;
 GTGCGCTATGCGA
->Badabing|Badabum|Phylum2|Class3|Order3|Family4|Genus4|Species5
+>Badabing|Badabum;tax=p:Phylum2,c:Class3,o:Order3,f:Family4,g:Genus4,s:Species5;
 ATACGCTTTGCGT";
         let LookupTables { k_mer_map, .. } = parse_reference_fasta_str(fasta_str).unwrap();
         for (k, v) in k_mer_map.iter().enumerate() {
@@ -325,15 +325,15 @@ ATCCGCTATGGGA";
 
     #[test]
     fn test_kmers() {
-        let fasta_str = r">Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species1
+        let fasta_str = r">Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species1;
 AAACCCCGT
->Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus1|Species1
+>Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species1;
 TAACCCCGG
->Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus2|Species3
+>Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus2,s:Species3;
 TTTAAAACC
->Badabing|Badabum|Phylum1|Class1|Order1|Family1|Genus2|Species3
+>Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus2,s:Species3;
 TTTAAAACA
->Badabing|Badabum|Phylum1|Class2|Order2|Family2|Genus3|Species4
+>Badabing|Badabum;tax=p:Phylum1,c:Class2,o:Order2,f:Family2,g:Genus3,s:Species4;
 AAACCCCGG";
         let LookupTables { k_mer_map, .. } = parse_reference_fasta_str(fasta_str).unwrap();
         // for (k, v) in k_mer_map.iter().enumerate() {
