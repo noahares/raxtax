@@ -36,9 +36,6 @@ pub struct Args {
     /// If 0, uses all available threads
     #[arg(short, long, default_value_t = 0, verbatim_doc_comment)]
     pub threads: usize,
-    /// Seed
-    #[arg(short, long, default_value_t = 42)]
-    pub seed: u64,
     /// Output prefix
     #[arg(short = 'o', long)]
     pub prefix: Option<PathBuf>,
