@@ -60,7 +60,7 @@ ACTCGATAC
 AATCGATTC
 ```
 
-Taxonomical identifiers may not contain any characters out of the set \[,:;|\] after `tax=`.
+Taxonomical identifiers may not contain any characters out of the set `,:|` after `tax=`.
 
 ### Input Query
 
