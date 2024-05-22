@@ -2,7 +2,9 @@ use ahash::HashMap;
 
 use itertools::Itertools;
 use logging_timer::time;
-use statrs::function::factorial::binomial;
+use statrs::function::factorial::{binomial, ln_binomial};
+
+pub const LOG_APPROXIMATION_THRESHOLD: u64 = 1000;
 
 #[time("debug")]
 pub fn highest_hit_prob_per_reference(
@@ -99,13 +101,23 @@ pub fn pmf(total_num_k_mers: u64, i: u64, num_trials: u64, num_intersections: u6
             return 0.0;
         }
     }
-    let num_possible_matches = binomial(num_intersections + i - 1, i);
-    let num_impossible_matches = binomial(
-        (total_num_k_mers - num_intersections) + (num_trials - i) - 1,
-        num_trials - i,
-    );
-    let num_possible_kmer_sets = binomial(total_num_k_mers + num_trials - 1, num_trials);
-    num_possible_matches * num_impossible_matches / num_possible_kmer_sets
+    if total_num_k_mers < LOG_APPROXIMATION_THRESHOLD {
+        let num_possible_matches = binomial(num_intersections + i - 1, i);
+        let num_impossible_matches = binomial(
+            (total_num_k_mers - num_intersections) + (num_trials - i) - 1,
+            num_trials - i,
+        );
+        let num_possible_kmer_sets = binomial(total_num_k_mers + num_trials - 1, num_trials);
+        (num_possible_matches / num_possible_kmer_sets) * num_impossible_matches
+    } else {
+        let num_possible_matches = ln_binomial(num_intersections + i - 1, i);
+        let num_impossible_matches = ln_binomial(
+            (total_num_k_mers - num_intersections) + (num_trials - i) - 1,
+            num_trials - i,
+        );
+        let num_possible_kmer_sets = ln_binomial(total_num_k_mers + num_trials - 1, num_trials);
+        (num_possible_matches + num_impossible_matches - num_possible_kmer_sets).exp()
+    }
 }
 
 #[cfg(test)]

@@ -15,6 +15,7 @@ pub fn raxtax<'a, 'b>(
     skip_exact_matches: bool,
 ) -> Vec<(&'b String, Option<Vec<(&'a String, Vec<f64>)>>)> {
     let warnings = AtomicBool::new(false);
+    let log_approximation = AtomicBool::new(false);
     let results = query_labels
         .par_iter()
         .zip_eq(query_sequences.par_iter())
@@ -56,7 +57,11 @@ pub fn raxtax<'a, 'b>(
             let mut hit_buffer: Vec<f64> = vec![0.0; lookup_table.level_hierarchy_maps[5].len()];
             let _tmr = timer!(Level::Debug; "Query Time");
             let k_mers = utils::sequence_to_kmers(query_sequence);
-            let num_trials = (query_sequence.len() / 2).min(128);
+            if k_mers.len() as u64 >= prob::LOG_APPROXIMATION_THRESHOLD {
+                warn!("Switching to logarithmic approximation of PMFs for long sequence {query_label}! This might lead to slighlty less accurate confidence values. If your results do not match your expectations, try trimming your query sequences.");
+                log_approximation.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+            let num_trials = query_sequence.len() / 2;
             k_mers
                 .iter()
                 .for_each(|query_kmer| {
@@ -96,6 +101,9 @@ pub fn raxtax<'a, 'b>(
 
     if warnings.into_inner() && log_enabled!(Level::Warn) {
         eprintln!("\x1b[33m[WARN ]\x1b[0m Exact matches for some queries differ above the species level! Check the log file for more information!");
+    }
+    if log_approximation.into_inner() && log_enabled!(Level::Warn) {
+        eprintln!("\x1b[33m[WARN ]\x1b[0m Switched to logarithmic approximation for query sequences with >= {} 8-mers. Check the log file for more information!", prob::LOG_APPROXIMATION_THRESHOLD);
     }
     results
 }
