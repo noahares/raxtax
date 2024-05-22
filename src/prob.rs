@@ -2,7 +2,7 @@ use ahash::HashMap;
 
 use itertools::Itertools;
 use logging_timer::time;
-use statrs::function::factorial::{binomial, ln_binomial};
+use statrs::function::factorial::ln_binomial;
 
 pub const LOG_APPROXIMATION_THRESHOLD: u64 = 1000;
 
