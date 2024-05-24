@@ -34,6 +34,9 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
     // Level 3: Family
     // Level 4: Genus
     // Level 5: Species
+    if fasta_str.is_empty() {
+        bail!("File is empty")
+    }
     let mut level_sets: [HashSet<String>; 6] = Default::default();
     let mut k_mer_map: Vec<Vec<usize>> = vec![Vec::new(); 2 << 15];
     let regex = Regex::new(r".*tax=p:(.*?),c:(.*?),o:(.*?),f:(.*?),g:(.*?),s:(.*?);")?;
@@ -230,6 +233,9 @@ pub fn parse_query_fasta_file(sequence_path: &PathBuf) -> Result<(Vec<String>, V
 
 #[time("info")]
 pub fn parse_query_fasta_str(fasta_str: &str) -> Result<(Vec<String>, Vec<Vec<u8>>)> {
+    if fasta_str.is_empty() {
+        bail!("File is empty")
+    }
     let lines: Vec<String> = fasta_str
         .lines()
         .map(|l| l.trim().to_string())
