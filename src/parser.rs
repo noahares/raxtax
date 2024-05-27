@@ -6,12 +6,11 @@ use log::{info, Level};
 use logging_timer::{time, timer};
 use rayon::prelude::*;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 use crate::utils;
 
-#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct LookupTables {
     pub labels: Vec<String>,
     pub sequences: HashMap<Vec<u8>, Vec<usize>>,
