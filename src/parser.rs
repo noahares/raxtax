@@ -98,6 +98,9 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
         sequences.push(current_sequence);
         let mut ordered_labels: Vec<String> = Vec::new();
         let mut sequence_map: HashMap<Vec<u8>, Vec<usize>> = HashMap::new();
+        if labels.len() != sequences.len() {
+            bail!("Number of sequences does not match number of labels")
+        }
         labels
             .iter()
             .zip_eq(sequences)
@@ -268,6 +271,9 @@ pub fn parse_query_fasta_str(fasta_str: &str) -> Result<(Vec<String>, Vec<Vec<u8
         }
     }
     sequences.push(current_sequence);
+    if labels.len() != sequences.len() {
+        bail!("Number of sequences does not match number of labels")
+    }
     Ok((labels, sequences))
 }
 
