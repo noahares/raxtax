@@ -260,7 +260,7 @@ pub fn parse_query_fasta_str(fasta_str: &str) -> Result<(Vec<String>, Vec<Vec<u8
             }
         } else {
             current_sequence.extend(line.chars().map(|c| -> u8 {
-                match c {
+                match c.to_ascii_uppercase() {
                     'A' => 0b00,
                     'C' => 0b01,
                     'G' => 0b10,
