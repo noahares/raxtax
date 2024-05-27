@@ -134,3 +134,7 @@ We will soon publish a manuscript about this method and what we use it for.
 ## References
 <a id="1">[1]</a>
 Edgar, Robert C. "SINTAX: a simple non-Bayesian taxonomy classifier for 16S and ITS sequences." biorxiv (2016): 074161.
+
+## Copyright
+ This work is licensed under CC BY-NC-SA 4.0. 
+ To view a copy of this license, visit https://creativecommons.org/licenses/by-nc-sa/4.0/
