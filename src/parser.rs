@@ -1,16 +1,22 @@
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use anyhow::{bail, Context, Result};
+use bincode;
 use indicatif::{ProgressIterator, ProgressStyle};
 use itertools::Itertools;
-use log::{info, Level};
+use log::{info, log_enabled, Level};
 use logging_timer::{time, timer};
 use rayon::prelude::*;
 use regex::Regex;
-use std::path::PathBuf;
+use serde::{Deserialize, Serialize};
+use std::{
+    fs::File,
+    io::{Read, Write},
+    path::PathBuf,
+};
 
 use crate::utils;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct LookupTables {
     pub labels: Vec<String>,
     pub sequences: HashMap<Vec<u8>, Vec<usize>>,
@@ -19,13 +25,38 @@ pub struct LookupTables {
     pub sequence_species_map: Vec<usize>,
 }
 
-pub fn parse_reference_fasta_file(sequence_path: &PathBuf) -> Result<LookupTables> {
-    let mut fasta_str = String::new();
-    let _ = utils::get_reader(sequence_path)?.read_to_string(&mut fasta_str);
-    parse_reference_fasta_str(&fasta_str)
+impl LookupTables {
+    #[time("info")]
+    pub fn save_to_file(&self, mut output: Box<dyn Write>) -> Result<()> {
+        if log_enabled!(Level::Info) {
+            println!("Writing database to file...");
+        }
+        bincode::serialize_into(&mut output, &self)?;
+        Ok(())
+    }
+
+    pub fn load_from_file(path: &PathBuf) -> Result<LookupTables> {
+        if log_enabled!(Level::Info) {
+            println!("Reading from database file...");
+        }
+        let mut file = File::open(path)?;
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer)?;
+        let decoded: LookupTables = bincode::deserialize(&buffer)?;
+        Ok(decoded)
+    }
 }
 
 #[time("info")]
+pub fn parse_reference_fasta_file(sequence_path: &PathBuf) -> Result<(bool, LookupTables)> {
+    if let Ok(lookup_table) = LookupTables::load_from_file(sequence_path) {
+        return Ok((false, lookup_table));
+    }
+    let mut fasta_str = String::new();
+    let _ = utils::get_reader(sequence_path)?.read_to_string(&mut fasta_str);
+    Ok((true, parse_reference_fasta_str(&fasta_str)?))
+}
+
 pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
     // Level 0: Phylum
     // Level 1: Class

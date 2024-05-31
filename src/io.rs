@@ -1,7 +1,11 @@
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
-use std::{io::Write, path::PathBuf};
+use log::info;
+use std::{
+    io::{BufWriter, Write},
+    path::PathBuf,
+};
 
 fn normalized_ratio(s: &str) -> Result<f64> {
     let ratio: f64 = s
@@ -17,7 +21,7 @@ fn normalized_ratio(s: &str) -> Result<f64> {
 #[derive(Parser)]
 #[command(author, version, about)]
 pub struct Args {
-    /// Path to the database fasta file
+    /// Path to the database fasta or bin file
     #[arg(short, long)]
     pub database_path: PathBuf,
     /// Path to the query file
@@ -32,6 +36,9 @@ pub struct Args {
     /// Output primary result file in tsv format
     #[arg(long)]
     pub tsv: bool,
+    /// Create a binary database to load instead of a fasta file for repeated execution
+    #[arg(long)]
+    pub make_db: bool,
     /// Number of threads
     /// If 0, uses all available threads
     #[arg(short, long, default_value_t = 0, verbatim_doc_comment)]
@@ -81,5 +88,17 @@ impl Args {
             std::fs::File::create(confidence_output).map(|f| Box::new(f) as Box<dyn Write>)?,
             std::fs::File::create(log_output).map(|f| Box::new(f) as Box<dyn Write + Send>)?,
         ))
+    }
+
+    pub fn get_db_output(&self) -> Result<Box<dyn Write>> {
+        let db_path = self.database_path.with_extension("bin");
+        if db_path.is_file() && !self.redo {
+            bail!("Output database file {} already exists! Delete it or run with --redo to force overriding existing files!", db_path.display());
+        }
+        info!("Created binary database at {}", db_path.display());
+        Ok(
+            std::fs::File::create(db_path)
+                .map(|f| Box::new(BufWriter::new(f)) as Box<dyn Write>)?,
+        )
     }
 }
