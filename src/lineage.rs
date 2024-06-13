@@ -6,35 +6,55 @@ pub struct Lineage<'a> {
     tree: &'a Tree,
     confidence_prefix_sum: Vec<f64>,
     confidence_vectors: Vec<(usize, Vec<f64>)>,
+    rounding_factor: f64,
 }
 
 impl<'a> Lineage<'a> {
     fn new(tree: &'a Tree, confidence_values: &[f64]) -> Self {
         let mut confidence_prefix_sum = vec![0.0];
-        confidence_prefix_sum.extend(confidence_values.iter().scan(0.0, |sum, i| { *sum += i; Some(*sum)}));
+        confidence_prefix_sum.extend(confidence_values.iter().scan(0.0, |sum, i| {
+            *sum += i;
+            Some(*sum)
+        }));
         Self {
             tree,
             confidence_prefix_sum,
             confidence_vectors: Vec::new(),
+            rounding_factor: 10_u32.pow(F64_OUTPUT_ACCURACY) as f64,
         }
     }
 
     pub fn evaluate(mut self) -> Vec<(&'a String, Vec<f64>)> {
         self.eval_recurse(&self.tree.root, &[]);
-        self.confidence_vectors.into_iter().map(|(idx, conf_values)| (&self.tree.lineages[idx], conf_values)).collect_vec()
+        self.confidence_vectors
+            .into_iter()
+            .sorted_by(|a, b| b.1.iter().partial_cmp(a.1.iter()).unwrap())
+            .map(|(idx, conf_values)| (&self.tree.lineages[idx], conf_values))
+            .collect_vec()
     }
 
     fn get_confidence(&self, node: &TreeNode) -> f64 {
-        self.confidence_prefix_sum[node.confidence_range.1] - self.confidence_prefix_sum[node.confidence_range.0]
+        ((self.confidence_prefix_sum[node.confidence_range.1]
+            - self.confidence_prefix_sum[node.confidence_range.0])
+            * self.rounding_factor)
+            .round()
+            / self.rounding_factor
     }
 
     fn eval_recurse(&mut self, node: &TreeNode, confidence_prefix: &[f64]) {
-        node.children.iter().for_each(|c| {
+        for c in &node.children {
             let mut conf_prefix = confidence_prefix.to_vec();
-            conf_prefix.push(self.get_confidence(c));
+            let child_conf = self.get_confidence(c);
+            if child_conf == 0.0 {
+                continue;
+            }
+            conf_prefix.push(child_conf);
             self.eval_recurse(c, &conf_prefix);
-            if c.level == self.tree.num_levels { self.confidence_vectors.push((c.confidence_range.0, conf_prefix)) };
-        });
+            if c.level == self.tree.num_levels {
+                self.confidence_vectors
+                    .push((c.confidence_range.0, conf_prefix))
+            };
+        }
     }
 }
 
@@ -59,18 +79,18 @@ impl Tree {
                     Some(name) => {
                         if name.as_str() != label {
                             current_node.add_child(TreeNode::new(
-                                    label.to_owned(),
-                                    level + 1,
-                                    confidence_idx,
+                                label.to_owned(),
+                                level + 1,
+                                confidence_idx,
                             ));
                         }
                         current_node.confidence_range.1 = confidence_idx + 1;
                     }
                     None => {
                         current_node.add_child(TreeNode::new(
-                                label.to_owned(),
-                                level + 1,
-                                confidence_idx,
+                            label.to_owned(),
+                            level + 1,
+                            confidence_idx,
                         ));
                         current_node.confidence_range.1 = confidence_idx + 1;
                     }
@@ -147,9 +167,10 @@ mod tests {
             "Animalia,Chordata,Mammalia,Primates,Hominidae,Pan".into(),
             "Animalia,Chordata,Mammalia,Carnivora,Canidae,Canis".into(),
             "Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis".into(),
+            "Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis_2".into(),
         ];
         let tree = Tree::new(lineages);
-        let confidence_values = &[0.1, 0.3, 0.4, 0.2];
+        let confidence_values = &[0.1, 0.3, 0.4, 0.002, 0.01];
         tree.print();
         let lineage = Lineage::new(&tree, confidence_values);
         let result = lineage.evaluate();
