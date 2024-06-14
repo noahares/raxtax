@@ -63,7 +63,7 @@ pub fn output_results(
                         values
                             .iter()
                             .map(|v| format!("{1:.0$}", F64_OUTPUT_ACCURACY as usize, v))
-                            .join("|")
+                            .join(",")
                     )
                 })
                 .join("\n")
@@ -106,7 +106,7 @@ pub fn output_results_tsv(
                         "{}\t{}\t{}",
                         query_label,
                         label
-                            .split('|')
+                            .split(',')
                             .map(|s| s.to_string())
                             .interleave(
                                 values

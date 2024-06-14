@@ -4,8 +4,6 @@ use itertools::Itertools;
 use logging_timer::time;
 use statrs::function::factorial::ln_binomial;
 
-pub const LOG_APPROXIMATION_THRESHOLD: u64 = 1000;
-
 #[time("debug")]
 pub fn highest_hit_prob_per_reference(
     total_num_k_mers: usize,

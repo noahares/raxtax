@@ -1,6 +1,5 @@
 use anyhow::{bail, Context, Result};
 use indicatif::{ProgressIterator, ProgressStyle};
-use itertools::Itertools;
 use log::Level;
 use logging_timer::{time, timer};
 use regex::Regex;
@@ -50,7 +49,7 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<lineage::Tree> {
             .with_message("Parsing Reference...")
             .map(|line| -> Result<()> {
                 if let Some(label) = line.strip_prefix('>') {
-                    let pieces = regex
+                    let lineage = regex
                         .captures(label)
                         .context(format!(
                             "Unexpected taxonomical annotation detected in label {}",
@@ -59,12 +58,8 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<lineage::Tree> {
                         .get(1)
                         .context(format!("No taxonomic string found in label {}", label))?
                         .as_str()
-                        .split(',')
-                        .collect_vec();
-                    if pieces.iter().any(|s| s.contains('|')) {
-                        bail!("Character '|' not allowed in sequence labels")
-                    }
-                    labels.push(pieces.join(","));
+                        .to_owned();
+                    labels.push(lineage);
                     if !current_sequence.is_empty() {
                         sequences.push(current_sequence.clone());
                         current_sequence = Vec::new();

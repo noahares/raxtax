@@ -12,7 +12,8 @@ use log::{log_enabled, Level};
 use logging_timer::time;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-pub const F64_OUTPUT_ACCURACY: u32 = 2;
+
+use crate::utils;
 
 pub struct Lineage<'a> {
     tree: &'a Tree,
@@ -32,7 +33,7 @@ impl<'a> Lineage<'a> {
             tree,
             confidence_prefix_sum,
             confidence_vectors: Vec::new(),
-            rounding_factor: 10_u32.pow(F64_OUTPUT_ACCURACY) as f64,
+            rounding_factor: 10_u32.pow(utils::F64_OUTPUT_ACCURACY) as f64,
         }
     }
 
