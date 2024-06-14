@@ -80,9 +80,16 @@ pub fn highest_hit_prob_per_reference(
             )
         })
         .collect();
-    intersection_sizes
+    let highest_hit_probs = intersection_sizes
         .iter()
         .map(|&n_intersections| highest_hit_probs[&n_intersections])
+        .collect_vec();
+
+    let probs_sum: f64 = highest_hit_probs.iter().sum();
+    assert!(probs_sum > 0.0);
+    highest_hit_probs
+        .into_iter()
+        .map(|v| v / probs_sum)
         .collect_vec()
 }
 

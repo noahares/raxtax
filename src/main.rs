@@ -6,6 +6,7 @@ use log::log_enabled;
 use log::Level;
 use logging_timer::timer;
 use raxtax::io;
+use raxtax::lineage;
 use raxtax::parser;
 use raxtax::raxtax::raxtax;
 use raxtax::utils;
@@ -40,7 +41,7 @@ fn main() {
         exit(exitcode::OSERR);
     };
     let _total_tmr = timer!(Level::Info; "Total Runtime");
-    let (store_db, lookup_table) = match parser::parse_reference_fasta_file(&args.database_path) {
+    let (store_db, tree) = match parser::parse_reference_fasta_file(&args.database_path) {
         Ok((b, res)) => (b, res),
         Err(e) => {
             error!("Failed to parse {}: {}", &args.database_path.display(), e);
@@ -57,7 +58,7 @@ fn main() {
     if store_db && args.make_db {
         match args.get_db_output() {
             Ok(db_output) => {
-                match lookup_table.save_to_file(db_output) {
+                match tree.save_to_file(db_output) {
                     Ok(_) => (),
                     Err(e) => {
                         error!("Failed to write database: {}", e);
@@ -91,7 +92,7 @@ fn main() {
             exit(exitcode::NOINPUT);
         }
     };
-    let result = raxtax(&query_data, &lookup_table, args.skip_exact_matches);
+    let result = raxtax(&query_data, &tree, args.skip_exact_matches);
     if let Some(tsv_output) = tsv_output {
         let sequences: Vec<String> = utils::decompress_sequences(&query_data.1);
         match utils::output_results_tsv(&result, sequences, tsv_output) {

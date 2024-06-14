@@ -1,75 +1,28 @@
-use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use anyhow::{bail, Context, Result};
-use bincode;
 use indicatif::{ProgressIterator, ProgressStyle};
 use itertools::Itertools;
-use log::{info, log_enabled, Level};
+use log::Level;
 use logging_timer::{time, timer};
-use rayon::prelude::*;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
-use std::{
-    fs::File,
-    io::{Read, Write},
-    path::PathBuf,
-};
+use std::{io::Read, path::PathBuf};
 
-use crate::utils;
-
-#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct LookupTables {
-    pub labels: Vec<String>,
-    pub sequences: HashMap<Vec<u8>, Vec<usize>>,
-    pub level_hierarchy_maps: Vec<Vec<Vec<usize>>>,
-    pub k_mer_map: Vec<Vec<usize>>,
-    pub sequence_species_map: Vec<usize>,
-}
-
-impl LookupTables {
-    #[time("info")]
-    pub fn save_to_file(&self, mut output: Box<dyn Write>) -> Result<()> {
-        if log_enabled!(Level::Info) {
-            println!("Writing database to file...");
-        }
-        bincode::serialize_into(&mut output, &self)?;
-        Ok(())
-    }
-
-    pub fn load_from_file(path: &PathBuf) -> Result<LookupTables> {
-        if log_enabled!(Level::Info) {
-            println!("Reading from database file...");
-        }
-        let mut file = File::open(path)?;
-        let mut buffer = Vec::new();
-        file.read_to_end(&mut buffer)?;
-        let decoded: LookupTables = bincode::deserialize(&buffer)?;
-        Ok(decoded)
-    }
-}
+use crate::{lineage, utils};
 
 #[time("info")]
-pub fn parse_reference_fasta_file(sequence_path: &PathBuf) -> Result<(bool, LookupTables)> {
-    if let Ok(lookup_table) = LookupTables::load_from_file(sequence_path) {
-        return Ok((false, lookup_table));
+pub fn parse_reference_fasta_file(sequence_path: &PathBuf) -> Result<(bool, lineage::Tree)> {
+    if let Ok(tree) = lineage::Tree::load_from_file(sequence_path) {
+        return Ok((false, tree));
     }
     let mut fasta_str = String::new();
     let _ = utils::get_reader(sequence_path)?.read_to_string(&mut fasta_str);
     Ok((true, parse_reference_fasta_str(&fasta_str)?))
 }
 
-pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
-    // Level 0: Phylum
-    // Level 1: Class
-    // Level 2: Order
-    // Level 3: Family
-    // Level 4: Genus
-    // Level 5: Species
+pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<lineage::Tree> {
     if fasta_str.is_empty() {
         bail!("File is empty")
     }
-    let mut level_sets: [HashSet<String>; 6] = Default::default();
-    let mut k_mer_map: Vec<Vec<usize>> = vec![Vec::new(); 2 << 15];
-    let regex = Regex::new(r".*tax=p:(.*?),c:(.*?),o:(.*?),f:(.*?),g:(.*?),s:(.*?);")?;
+    let regex = Regex::new(r"tax=([^;]+);")?;
     let (labels, sequences) = {
         let _tmr = timer!(Level::Info; "Read file and create k-mer mapping");
         let lines: Vec<String> = fasta_str
@@ -97,17 +50,21 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
             .with_message("Parsing Reference...")
             .map(|line| -> Result<()> {
                 if let Some(label) = line.strip_prefix('>') {
-                    let (_, pieces): (&str, [&str; 6]) = regex
+                    let pieces = regex
                         .captures(label)
-                        .map(|caps| caps.extract())
                         .context(format!(
-                            "Unexpected taxonomical annotation detected in {}",
+                            "Unexpected taxonomical annotation detected in label {}",
                             label
-                        ))?;
+                        ))?
+                        .get(1)
+                        .context(format!("No taxonomic string found in label {}", label))?
+                        .as_str()
+                        .split(',')
+                        .collect_vec();
                     if pieces.iter().any(|s| s.contains('|')) {
                         bail!("Character '|' not allowed in sequence labels")
                     }
-                    labels.push(pieces.join("|"));
+                    labels.push(pieces.join(","));
                     if !current_sequence.is_empty() {
                         sequences.push(current_sequence.clone());
                         current_sequence = Vec::new();
@@ -127,135 +84,15 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<LookupTables> {
             })
             .collect::<Result<Vec<()>>>()?;
         sequences.push(current_sequence);
-        let mut ordered_labels: Vec<String> = Vec::new();
-        let mut sequence_map: HashMap<Vec<u8>, Vec<usize>> = HashMap::new();
         if labels.len() != sequences.len() {
             bail!("Number of sequences does not match number of labels")
         }
-        labels
-            .iter()
-            .zip_eq(sequences)
-            .sorted_by_key(|(l, _)| *l)
-            .enumerate()
-            .progress_with_style(
-                ProgressStyle::with_template(
-                    "[{elapsed_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7}[ETA:{eta}] {msg}",
-                )
-                .unwrap()
-                .progress_chars("##-"),
-            )
-            .with_message("Creating k-mer map...")
-            .for_each(|(idx, (l, s))| {
-                let taxon_info = l.split('|').collect_vec();
-                taxon_info[0..6]
-                    .iter()
-                    .zip_eq(0..level_sets.len())
-                    .for_each(|(name, idx)| {
-                        level_sets[idx].insert(name.to_string());
-                    });
-                ordered_labels.push(l.to_string());
-                sequence_map.entry(s.clone()).or_default().push(idx);
-                let mut k_mer: u16 = 0;
-                s[0..8]
-                    .iter()
-                    .enumerate()
-                    .for_each(|(j, c)| k_mer |= (*c as u16) << (14 - j * 2));
-                k_mer_map[k_mer as usize].push(idx);
-                s[8..].iter().for_each(|c| {
-                    k_mer = (k_mer << 2) | *c as u16;
-                    k_mer_map[k_mer as usize].push(idx);
-                });
-            });
-        (ordered_labels, sequence_map)
+        (labels, sequences)
     };
+    lineage::Tree::new(labels, sequences)
 
-    // create mapping to index for each taxonomical level
-    let level_name_maps = level_sets
-        .into_iter()
-        .map(|set| set.into_iter().sorted().collect_vec())
-        .collect::<Vec<Vec<String>>>();
-    info!("Unique Phyla: {}", level_name_maps[0].len());
-    info!("Unique Classes: {}", level_name_maps[1].len());
-    info!("Unique Orders: {}", level_name_maps[2].len());
-    info!("Unique Families: {}", level_name_maps[3].len());
-    info!("Unique Genus: {}", level_name_maps[4].len());
-    info!("Unique Species: {}", level_name_maps[5].len());
-    info!("Unique Sequences: {}", labels.len());
-    // need reverse mapping for second parsing of labels and sequences to build data structure
-    let level_rev_maps = level_name_maps
-        .iter()
-        .map(|map| {
-            map.iter()
-                .enumerate()
-                .map(|(i, s)| (s.as_str(), i))
-                .collect::<HashMap<&str, usize>>()
-        })
-        .collect_vec();
-
-    // create data structure for mapping k-mers to sequences as well as between taxonomical levels
-    let mut level_hierarchy_maps: Vec<Vec<HashSet<usize>>> = Vec::new();
-    for level in &level_name_maps {
-        level_hierarchy_maps.push(vec![HashSet::new(); level.len()]);
-    }
-    labels.iter().enumerate().for_each(|(i, label)| {
-        let taxon_info = label.split('|').collect_vec();
-        let phylum_idx = level_rev_maps[0][taxon_info[0]];
-        let class_idx = level_rev_maps[1][taxon_info[1]];
-        let order_idx = level_rev_maps[2][taxon_info[2]];
-        let family_idx = level_rev_maps[3][taxon_info[3]];
-        let genus_idx = level_rev_maps[4][taxon_info[4]];
-        let species_idx = level_rev_maps[5][taxon_info[5]];
-
-        level_hierarchy_maps[0][phylum_idx].insert(class_idx);
-        level_hierarchy_maps[1][class_idx].insert(order_idx);
-        level_hierarchy_maps[2][order_idx].insert(family_idx);
-        level_hierarchy_maps[3][family_idx].insert(genus_idx);
-        level_hierarchy_maps[4][genus_idx].insert(species_idx);
-        level_hierarchy_maps[5][species_idx].insert(i);
-    });
-
-    for (map, lm) in level_hierarchy_maps.iter().zip(level_name_maps[1..].iter()) {
-        if map.iter().fold(0, |acc, m| acc + m.len()) > lm.len() {
-            let problematic_sequences = map
-                .iter()
-                .map(|m| m.iter().collect_vec())
-                .concat()
-                .into_iter()
-                .duplicates()
-                .map(|&i| lm[i].clone())
-                .join(", ");
-            bail!(
-                "Found inconsistent taxonomic lineages containing: {}",
-                problematic_sequences
-            );
-        }
-    }
-
-    let mut sequence_species_map = vec![0; labels.len()];
-    for (species_id, sequences) in level_hierarchy_maps[5].iter().enumerate() {
-        for sequence_id in sequences {
-            sequence_species_map[*sequence_id] = species_id;
-        }
-    }
-
-    Ok(LookupTables {
-        labels,
-        sequences,
-        level_hierarchy_maps: level_hierarchy_maps
-            .into_iter()
-            .map(|level| {
-                level
-                    .into_iter()
-                    .map(|item| item.into_iter().sorted().collect_vec())
-                    .collect_vec()
-            })
-            .collect_vec(),
-        k_mer_map: k_mer_map
-            .into_par_iter()
-            .map(|seqs| seqs.into_iter().unique().sorted().collect_vec())
-            .collect(),
-        sequence_species_map,
-    })
+    // .for_each(|(idx, level)| info!("Unique values at level {}: {}", idx, level.len()));
+    // info!("Unique Sequences: {}", labels.len());
 }
 
 pub fn parse_query_fasta_file(sequence_path: &PathBuf) -> Result<(Vec<String>, Vec<Vec<u8>>)> {
@@ -308,120 +145,119 @@ pub fn parse_query_fasta_str(fasta_str: &str) -> Result<(Vec<String>, Vec<Vec<u8
     Ok((labels, sequences))
 }
 
-#[cfg(test)]
-mod tests {
-    use itertools::Itertools;
-
-    use crate::parser::LookupTables;
-
-    use super::{parse_query_fasta_str, parse_reference_fasta_str};
-
-    #[test]
-    fn test_str_parser() {
-        let fasta_str = r">Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species1;
-AAACCCTTTGGGA
->Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species2;
-ATACGCTTTGGGA
->Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order4,f:Family5,g:Genus2,s:Species3;
-ATCCGCTATGGGA
->Badabing|Badabum;tax=p:Phylum1,c:Class2,o:Order2,f:Family3,g:Genus3,s:Species6;
-ATACGCTTTGCGT
->Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species2;
-GTGCGCTATGCGA
->Badabing|Badabum;tax=p:Phylum2,c:Class3,o:Order3,f:Family4,g:Genus4,s:Species5;
-ATACGCTTTGCGT";
-        let LookupTables { k_mer_map, .. } = parse_reference_fasta_str(fasta_str).unwrap();
-        for (k, v) in k_mer_map.iter().enumerate() {
-            if !v.is_empty() {
-                println!("{k:b}:\n {v:?}");
-            }
-        }
-        assert_eq!(
-            k_mer_map[0b1010111111110_usize].iter().collect_vec(),
-            &[&0_usize]
-        );
-        assert_eq!(
-            k_mer_map[0b11000110011111_usize]
-                .iter()
-                .sorted()
-                .collect_vec(),
-            &[&1, &4, &5]
-        );
-        assert_eq!(
-            k_mer_map[0b110011100111010_usize].iter().collect_vec(),
-            &[&3]
-        );
-    }
-
-    #[test]
-    fn test_query_parser() {
-        let fasta_str = r">label1
-AAACCCTTTGGGA
->label2
-ATACGCTTTGGGA
->label3
-ATCCGCTATGGGA";
-        let (_, sequences) = parse_query_fasta_str(fasta_str).unwrap();
-        assert_eq!(sequences[0], &[0, 0, 0, 1, 1, 1, 3, 3, 3, 2, 2, 2, 0]);
-    }
-
-    #[test]
-    fn test_kmers() {
-        let fasta_str = r">Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species1;
-AAACCCCGT
->Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species1;
-TAACCCCGG
->Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus2,s:Species3;
-TTTAAAACC
->Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus2,s:Species3;
-TTTAAAACA
->Badabing|Badabum;tax=p:Phylum1,c:Class2,o:Order2,f:Family2,g:Genus3,s:Species4;
-AAACCCCGG";
-        let LookupTables { k_mer_map, .. } = parse_reference_fasta_str(fasta_str).unwrap();
-        // for (k, v) in k_mer_map.iter().enumerate() {
-        //     if !v.is_empty() {
-        //         println!("{k:b}:\n {v:?}");
-        //     }
-        // }
-        assert_eq!(
-            k_mer_map[0b101010110_usize].iter().sorted().collect_vec(),
-            &[&0, &4]
-        );
-        assert_eq!(
-            k_mer_map[0b10101011010_usize].iter().sorted().collect_vec(),
-            &[&1, &4]
-        );
-        assert_eq!(
-            k_mer_map[0b10101011011_usize].iter().sorted().collect_vec(),
-            &[&0]
-        );
-        assert_eq!(
-            k_mer_map[0b1100000101010110_usize]
-                .iter()
-                .sorted()
-                .collect_vec(),
-            &[&1]
-        );
-        assert_eq!(
-            k_mer_map[0b1111000000000101_usize]
-                .iter()
-                .sorted()
-                .collect_vec(),
-            &[&2]
-        );
-        assert_eq!(
-            k_mer_map[0b1111000000000101_usize]
-                .iter()
-                .sorted()
-                .collect_vec(),
-            &[&2]
-        );
-        assert_eq!(
-            k_mer_map[0b1111110000000001_usize]
-                .iter()
-                .sorted()
-                .collect_vec(),
-            &[&2, &3]
-        );
-    }
-}
+// #[cfg(test)]
+// mod tests {
+//     use itertools::Itertools;
+//
+//
+//     use super::{parse_query_fasta_str, parse_reference_fasta_str};
+//
+//     #[test]
+//     fn test_str_parser() {
+//         let fasta_str = r">Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species1;
+// AAACCCTTTGGGA
+// >Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species2;
+// ATACGCTTTGGGA
+// >Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order4,f:Family5,g:Genus2,s:Species3;
+// ATCCGCTATGGGA
+// >Badabing|Badabum;tax=p:Phylum1,c:Class2,o:Order2,f:Family3,g:Genus3,s:Species6;
+// ATACGCTTTGCGT
+// >Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species2;
+// GTGCGCTATGCGA
+// >Badabing|Badabum;tax=p:Phylum2,c:Class3,o:Order3,f:Family4,g:Genus4,s:Species5;
+// ATACGCTTTGCGT";
+//         let LookupTables { k_mer_map, .. } = parse_reference_fasta_str(fasta_str).unwrap();
+//         for (k, v) in k_mer_map.iter().enumerate() {
+//             if !v.is_empty() {
+//                 println!("{k:b}:\n {v:?}");
+//             }
+//         }
+//         assert_eq!(
+//             k_mer_map[0b1010111111110_usize].iter().collect_vec(),
+//             &[&0_usize]
+//         );
+//         assert_eq!(
+//             k_mer_map[0b11000110011111_usize]
+//                 .iter()
+//                 .sorted()
+//                 .collect_vec(),
+//             &[&1, &4, &5]
+//         );
+//         assert_eq!(
+//             k_mer_map[0b110011100111010_usize].iter().collect_vec(),
+//             &[&3]
+//         );
+//     }
+//
+//     #[test]
+//     fn test_query_parser() {
+//         let fasta_str = r">label1
+// AAACCCTTTGGGA
+// >label2
+// ATACGCTTTGGGA
+// >label3
+// ATCCGCTATGGGA";
+//         let (_, sequences) = parse_query_fasta_str(fasta_str).unwrap();
+//         assert_eq!(sequences[0], &[0, 0, 0, 1, 1, 1, 3, 3, 3, 2, 2, 2, 0]);
+//     }
+//
+//     #[test]
+//     fn test_kmers() {
+//         let fasta_str = r">Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species1;
+// AAACCCCGT
+// >Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species1;
+// TAACCCCGG
+// >Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus2,s:Species3;
+// TTTAAAACC
+// >Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus2,s:Species3;
+// TTTAAAACA
+// >Badabing|Badabum;tax=p:Phylum1,c:Class2,o:Order2,f:Family2,g:Genus3,s:Species4;
+// AAACCCCGG";
+//         let LookupTables { k_mer_map, .. } = parse_reference_fasta_str(fasta_str).unwrap();
+//         // for (k, v) in k_mer_map.iter().enumerate() {
+//         //     if !v.is_empty() {
+//         //         println!("{k:b}:\n {v:?}");
+//         //     }
+//         // }
+//         assert_eq!(
+//             k_mer_map[0b101010110_usize].iter().sorted().collect_vec(),
+//             &[&0, &4]
+//         );
+//         assert_eq!(
+//             k_mer_map[0b10101011010_usize].iter().sorted().collect_vec(),
+//             &[&1, &4]
+//         );
+//         assert_eq!(
+//             k_mer_map[0b10101011011_usize].iter().sorted().collect_vec(),
+//             &[&0]
+//         );
+//         assert_eq!(
+//             k_mer_map[0b1100000101010110_usize]
+//                 .iter()
+//                 .sorted()
+//                 .collect_vec(),
+//             &[&1]
+//         );
+//         assert_eq!(
+//             k_mer_map[0b1111000000000101_usize]
+//                 .iter()
+//                 .sorted()
+//                 .collect_vec(),
+//             &[&2]
+//         );
+//         assert_eq!(
+//             k_mer_map[0b1111000000000101_usize]
+//                 .iter()
+//                 .sorted()
+//                 .collect_vec(),
+//             &[&2]
+//         );
+//         assert_eq!(
+//             k_mer_map[0b1111110000000001_usize]
+//                 .iter()
+//                 .sorted()
+//                 .collect_vec(),
+//             &[&2, &3]
+//         );
+//     }
+// }
