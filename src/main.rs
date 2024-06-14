@@ -6,17 +6,14 @@ use log::log_enabled;
 use log::Level;
 use logging_timer::timer;
 use raxtax::io;
-use raxtax::lineage;
 use raxtax::parser;
 use raxtax::raxtax::raxtax;
 use raxtax::utils;
 
 fn main() {
     let args = io::Args::parse();
-    let (output, tsv_output, confidence_output, log_output) = match args.get_output() {
-        Ok((output, tsv_output, confidence_output, log_output)) => {
-            (output, tsv_output, confidence_output, log_output)
-        }
+    let (output, tsv_output, log_output) = match args.get_output() {
+        Ok((output, tsv_output, log_output)) => (output, tsv_output, log_output),
         Err(e) => {
             if args.verbosity.log_level_filter() >= Level::Error {
                 eprintln!("\x1b[31m[ERROR]\x1b[0m {}", e);
@@ -109,7 +106,7 @@ fn main() {
             }
         };
     }
-    match utils::output_results(&result, output, confidence_output, args.min_confidence) {
+    match utils::output_results(&result, output) {
         Ok(res) => res,
         Err(e) => {
             error!("Failed to write results to files: {}", e);

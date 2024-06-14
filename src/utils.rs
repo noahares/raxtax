@@ -10,7 +10,6 @@ use flate2::read::GzDecoder;
 use itertools::Itertools;
 
 pub const F64_OUTPUT_ACCURACY: u32 = 2;
-const MIN_CLASS_CONFIDENCE: f64 = 0.8;
 
 pub fn sequence_to_kmers(sequence: &[u8]) -> Vec<u16> {
     let mut k_mer: u16 = 0;
@@ -50,8 +49,6 @@ pub fn get_reader(path: &PathBuf) -> Result<Box<dyn Read>> {
 pub fn output_results(
     results: &[(&String, Vec<(&String, Vec<f64>)>)],
     mut output: Box<dyn Write>,
-    mut confidence_output: Box<dyn Write>,
-    min_confidence: f64,
 ) -> Result<()> {
     let output_lines: Vec<String> = results
         .iter()

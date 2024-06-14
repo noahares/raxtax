@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use clap::Parser;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use log::info;
@@ -6,17 +6,6 @@ use std::{
     io::{BufWriter, Write},
     path::PathBuf,
 };
-
-fn normalized_ratio(s: &str) -> Result<f64> {
-    let ratio: f64 = s
-        .parse()
-        .with_context(|| format!("`{s}` isn't a valid fraction"))?;
-    if (0.0..=1.0).contains(&ratio) {
-        Ok(ratio)
-    } else {
-        bail!("Fraction is not in range {:.2}-{:.2}", 0.0, 1.0)
-    }
-}
 
 #[derive(Parser)]
 #[command(author, version, about)]
@@ -27,9 +16,6 @@ pub struct Args {
     /// Path to the query file
     #[arg(short = 'i', long)]
     pub query_file: PathBuf,
-    /// Confidence threshold
-    #[arg(short = 'c', long, default_value_t = 0.8, value_parser = normalized_ratio)]
-    pub min_confidence: f64,
     /// If used for mislabling analysis, you want to skip exact sequence matches
     #[arg(long)]
     pub skip_exact_matches: bool,
@@ -59,7 +45,6 @@ impl Args {
     ) -> Result<(
         Box<dyn Write>,
         Option<Box<dyn Write>>,
-        Box<dyn Write>,
         Box<dyn Write + Send>,
     )> {
         let prefix = self
@@ -79,13 +64,10 @@ impl Args {
         } else {
             None
         };
-        let confidence_output =
-            prefix.join(format!("raxtax.confidence{}.out", self.min_confidence));
         let log_output = prefix.join("raxtax.log");
         Ok((
             std::fs::File::create(result_output).map(|f| Box::new(f) as Box<dyn Write>)?,
             tsv_output,
-            std::fs::File::create(confidence_output).map(|f| Box::new(f) as Box<dyn Write>)?,
             std::fs::File::create(log_output).map(|f| Box::new(f) as Box<dyn Write + Send>)?,
         ))
     }
