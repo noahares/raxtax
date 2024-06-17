@@ -37,7 +37,7 @@ impl<'a> Lineage<'a> {
         }
     }
 
-    #[time("info")]
+    #[time("debug")]
     pub fn evaluate(mut self) -> Vec<(&'a String, Vec<f64>)> {
         self.eval_recurse(&self.tree.root, &[]);
         self.confidence_vectors
@@ -64,15 +64,15 @@ impl<'a> Lineage<'a> {
             no_child_significant = false;
             conf_prefix.push(child_conf);
             self.eval_recurse(c, &conf_prefix);
-            if c.level == self.tree.num_levels - 1 {
+            if self.tree.is_taxon_leaf(c) {
                 self.confidence_vectors
                     .push((c.confidence_range.0, conf_prefix));
             }
         }
-        if no_child_significant && node.level < self.tree.num_levels - 1 {
+        if no_child_significant && self.tree.is_inner_taxon_node(node) {
             let mut conf_prefix = confidence_prefix.to_vec();
             let mut current_node = node;
-            while current_node.level < self.tree.num_levels - 1 {
+            while self.tree.is_inner_taxon_node(current_node) {
                 current_node = current_node
                     .children
                     .iter()
@@ -101,7 +101,7 @@ pub struct Tree {
 }
 
 impl Tree {
-    #[time("info")]
+    #[time("info", "Tree::{}")]
     pub fn new(lineages: Vec<String>, sequences: Vec<Vec<u8>>) -> Result<Self> {
         let mut root = TreeNode::new(String::from("root"), 0, 0);
         let mut sequence_map: HashMap<Vec<u8>, Vec<usize>> = HashMap::new();
@@ -175,7 +175,6 @@ impl Tree {
         root.confidence_range.1 = confidence_idx;
         let (sorted_lineages, _): (Vec<String>, Vec<Vec<u8>>) =
             lineage_sequence_pairs.into_iter().unzip();
-        dbg!(num_levels);
         Ok(Self {
             root,
             lineages: sorted_lineages,
@@ -204,7 +203,7 @@ impl Tree {
 
     pub fn load_from_file(path: &PathBuf) -> Result<Self> {
         if log_enabled!(Level::Info) {
-            println!("Reading from database file...");
+            println!("Trying to read from database file...");
         }
         let mut file = File::open(path)?;
         let mut buffer = Vec::new();
@@ -217,6 +216,14 @@ impl Tree {
         let mut values = vec![1.0; self.num_levels - 2];
         values.push(1.0 / num_shared as f64);
         values
+    }
+
+    fn is_inner_taxon_node(&self, node: &TreeNode) -> bool {
+        node.level < self.num_levels - 1
+    }
+
+    fn is_taxon_leaf(&self, node: &TreeNode) -> bool {
+        node.level == self.num_levels - 1
     }
 }
 
@@ -287,8 +294,23 @@ mod tests {
         tree.print();
         let lineage = Lineage::new(&tree, confidence_values);
         let result = lineage.evaluate();
-        dbg!(result);
-        assert_eq!(0, 1);
+        assert_eq!(
+            result,
+            vec![
+                (
+                    &String::from("Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis"),
+                    vec![0.81, 0.81, 0.81, 0.8, 0.7, 0.7,],
+                ),
+                (
+                    &"Animalia,Chordata,Mammalia,Carnivora,Canidae,Canis".into(),
+                    vec![0.81, 0.81, 0.81, 0.8, 0.1, 0.1,],
+                ),
+                (
+                    &"Animalia,Chordata,Mammalia,Primates,Hominidae,Pan".into(),
+                    vec![0.81, 0.81, 0.81, 0.01, 0.01, 0.01,],
+                ),
+            ]
+        );
     }
 
     #[test]
@@ -304,7 +326,12 @@ mod tests {
         tree.print();
         let lineage = Lineage::new(&tree, confidence_values);
         let result = lineage.evaluate();
-        dbg!(result);
-        assert_eq!(0, 1);
+        assert_eq!(
+            result,
+            vec![(
+                &String::from("Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis_ferrocius"),
+                vec![0.01, 0.01, 0.01, 0.01, 0.01, 0.01,],
+            ),]
+        );
     }
 }

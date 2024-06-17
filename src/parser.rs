@@ -85,9 +85,6 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<lineage::Tree> {
         (labels, sequences)
     };
     lineage::Tree::new(labels, sequences)
-
-    // .for_each(|(idx, level)| info!("Unique values at level {}: {}", idx, level.len()));
-    // info!("Unique Sequences: {}", labels.len());
 }
 
 pub fn parse_query_fasta_file(sequence_path: &PathBuf) -> Result<(Vec<String>, Vec<Vec<u8>>)> {
