@@ -13,7 +13,7 @@ use logging_timer::time;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::utils;
+use crate::utils::{self, map_four_to_two_bit_repr};
 
 pub struct Lineage<'a> {
     tree: &'a Tree,
@@ -160,15 +160,15 @@ impl Tree {
 
             sequence_map.entry(sequence.clone()).or_default().push(idx);
 
-            let mut k_mer: u16 = 0;
-            sequence[0..8]
-                .iter()
-                .enumerate()
-                .for_each(|(j, c)| k_mer |= (*c as u16) << (14 - j * 2));
-            k_mer_map[k_mer as usize].push(idx);
-            sequence[8..].iter().for_each(|c| {
-                k_mer = (k_mer << 2) | *c as u16;
-                k_mer_map[k_mer as usize].push(idx);
+            sequence.windows(8).for_each(|vals| {
+                if let Some(k_mer) = vals
+                    .iter()
+                    .enumerate()
+                    .map(|(j, v)| map_four_to_two_bit_repr(*v).map(|c| c << (14 - j * 2)))
+                    .fold_options(0_u16, |acc, c| acc | c)
+                {
+                        k_mer_map[k_mer as usize].push(idx);
+                }
             });
             Ok(())
         }).collect::<Result<Vec<()>>>()?;

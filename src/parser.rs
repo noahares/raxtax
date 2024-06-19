@@ -7,6 +7,31 @@ use std::{io::Read, path::PathBuf};
 
 use crate::{lineage, utils};
 
+fn map_dna_char(ch: char) -> u8 {
+    let a: u8 = 0b0001;
+    let c: u8 = 0b0010;
+    let g: u8 = 0b0100;
+    let t: u8 = 0b1000;
+    match ch.to_ascii_uppercase() {
+        'A' => a,
+        'C' => c,
+        'G' => g,
+        'T' => t,
+        'W' => a | t,
+        'S' => c | g,
+        'M' => a | c,
+        'K' => g | t,
+        'R' => a | g,
+        'Y' => c | t,
+        'B' => c | g | t,
+        'D' => a | g | t,
+        'H' => a | c | t,
+        'V' => a | c | t,
+        'N' => a | c | g | t,
+        _ => panic!("Unexpected character: {}", ch),
+    }
+}
+
 #[time("info")]
 pub fn parse_reference_fasta_file(sequence_path: &PathBuf) -> Result<(bool, lineage::Tree)> {
     if let Ok(tree) = lineage::Tree::load_from_file(sequence_path) {
@@ -65,15 +90,7 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<lineage::Tree> {
                         current_sequence = Vec::new();
                     }
                 } else {
-                    current_sequence.extend(line.chars().map(|c| -> u8 {
-                        match c.to_ascii_uppercase() {
-                            'A' => 0b00,
-                            'C' => 0b01,
-                            'G' => 0b10,
-                            'T' => 0b11,
-                            _ => panic!("Unexpected character: {}", c),
-                        }
-                    }))
+                    current_sequence.extend(line.chars().map(|c| -> u8 { map_dna_char(c) }))
                 }
                 Ok(())
             })
@@ -119,15 +136,7 @@ pub fn parse_query_fasta_str(fasta_str: &str) -> Result<(Vec<String>, Vec<Vec<u8
                 current_sequence = Vec::new();
             }
         } else {
-            current_sequence.extend(line.chars().map(|c| -> u8 {
-                match c.to_ascii_uppercase() {
-                    'A' => 0b00,
-                    'C' => 0b01,
-                    'G' => 0b10,
-                    'T' => 0b11,
-                    _ => panic!("Unexpected character: {}", c),
-                }
-            }))
+            current_sequence.extend(line.chars().map(|c| -> u8 { map_dna_char(c) }))
         }
     }
     sequences.push(current_sequence);

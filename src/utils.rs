@@ -11,17 +11,27 @@ use itertools::Itertools;
 
 pub const F64_OUTPUT_ACCURACY: u32 = 2;
 
+pub fn map_four_to_two_bit_repr(c: u8) -> Option<u16> {
+    match c {
+        0b0001 => Some(0b00),
+        0b0010 => Some(0b01),
+        0b0100 => Some(0b10),
+        0b1000 => Some(0b11),
+        _ => None,
+    }
+}
+
 pub fn sequence_to_kmers(sequence: &[u8]) -> Vec<u16> {
-    let mut k_mer: u16 = 0;
     let mut k_mers = HashSet::new();
-    sequence[0..8]
-        .iter()
-        .enumerate()
-        .for_each(|(j, c)| k_mer |= (*c as u16) << (14 - j * 2));
-    k_mers.insert(k_mer);
-    sequence[8..].iter().for_each(|c| {
-        k_mer = (k_mer << 2) | *c as u16;
-        k_mers.insert(k_mer);
+    sequence.windows(8).for_each(|vals| {
+        if let Some(k_mer) = vals
+            .iter()
+            .enumerate()
+            .map(|(j, v)| map_four_to_two_bit_repr(*v).map(|c| c << (14 - j * 2)))
+            .fold_options(0_u16, |acc, c| acc | c)
+        {
+            k_mers.insert(k_mer);
+        }
     });
     k_mers.into_iter().unique().sorted().collect_vec()
 }
