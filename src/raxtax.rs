@@ -31,7 +31,7 @@ pub fn raxtax<'a, 'b>(
             if !skip_exact_matches {
                 if let Some(label_idxs) = tree.sequences.get(query_sequence) {
                     info!("Exact sequence match for query {query_label}");
-                    if !label_idxs.iter().map(|&idx| tree.lineages[idx].split(',').take(tree.num_levels - 2).join(",")).all_equal() {
+                    if !label_idxs.iter().map(|&idx| tree.lineages[idx].rsplit_once(',').unwrap().0).all_equal() {
                         warn!("Exact matches for {query_label} differ above the species level! Confidence values will be wrong!");
                         warnings.store(true, std::sync::atomic::Ordering::Relaxed);
                     }
@@ -42,7 +42,7 @@ pub fn raxtax<'a, 'b>(
                                 .map(|&idx| {
                                     (
                                         &tree.lineages[idx],
-                                        tree.get_shared_exact_match(label_idxs.len())
+                                        tree.get_shared_exact_match(tree.lineages[idx].chars().filter(|c| *c == ',').count(), label_idxs.len())
                                     )
                                 })
                                 .collect_vec(),

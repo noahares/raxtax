@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use std::{
     fs::File,
     io::{Read, Write},
@@ -96,21 +96,21 @@ pub struct Tree {
     pub lineages: Vec<String>,
     pub sequences: HashMap<Vec<u8>, Vec<usize>>,
     pub k_mer_map: Vec<Vec<usize>>,
-    pub num_levels: usize,
     pub num_tips: usize,
 }
 
 impl Tree {
     #[time("info", "Tree::{}")]
     pub fn new(lineages: Vec<String>, sequences: Vec<Vec<u8>>) -> Result<Self> {
-        let mut root = TreeNode::new(String::from("root"), 0, 0);
+        let mut root = TreeNode::new(String::from("root"), 0, NodeType::Inner);
         let mut sequence_map: HashMap<Vec<u8>, Vec<usize>> = HashMap::new();
         let mut k_mer_map: Vec<Vec<usize>> = vec![Vec::new(); 2 << 15];
         let mut lineage_sequence_pairs = lineages.into_iter().zip_eq(sequences).collect_vec();
         lineage_sequence_pairs.sort_by(|(l1, _), (l2, _)| l1.cmp(l2));
-        let num_levels = lineage_sequence_pairs[0].0.split(',').count() + 1;
         let mut confidence_idx = 0_usize;
-        let _ = lineage_sequence_pairs.iter().enumerate()
+        let _ = lineage_sequence_pairs
+            .iter()
+            .enumerate()
             .progress_with_style(
                 ProgressStyle::with_template(
                     "[{elapsed_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7}[ETA:{eta}] {msg}",
@@ -120,58 +120,62 @@ impl Tree {
             )
             .with_message("Creating lineage tree and k-mer map...")
             .map(|(idx, (lineage, sequence))| -> Result<()> {
-            let levels = lineage.split(',').collect_vec();
-            if levels.len() + 1 != num_levels {
-                    bail!("Number of taxonomical levels do not match for {lineage}, expexted {}, found {}", num_levels - 1, levels.len())
-            }
-            let mut current_node = &mut root;
-            for (level, &label) in levels.iter().enumerate() {
-                match &current_node.get_last_child_label() {
-                    Some(name) => {
-                        if name.as_str() != label {
+                let levels = lineage.split(',').collect_vec();
+                let last_level_idx = levels.len() - 1;
+                let mut current_node = &mut root;
+                for (level, &label) in levels.iter().enumerate() {
+                    let node_type = if level == last_level_idx {
+                        NodeType::Taxon
+                    } else {
+                        NodeType::Inner
+                    };
+                    match &current_node.get_last_child_label() {
+                        Some(name) => {
+                            if name.as_str() != label {
+                                current_node.add_child(TreeNode::new(
+                                    label.to_owned(),
+                                    confidence_idx,
+                                    node_type,
+                                ));
+                            }
+                            current_node.confidence_range.1 = confidence_idx + 1;
+                        }
+                        None => {
                             current_node.add_child(TreeNode::new(
                                 label.to_owned(),
-                                level + 1,
                                 confidence_idx,
+                                node_type,
                             ));
+                            current_node.confidence_range.1 = confidence_idx + 1;
                         }
-                        current_node.confidence_range.1 = confidence_idx + 1;
+                    };
+                    if level == last_level_idx {
+                        confidence_idx += 1;
                     }
-                    None => {
-                        current_node.add_child(TreeNode::new(
-                            label.to_owned(),
-                            level + 1,
-                            confidence_idx,
-                        ));
-                        current_node.confidence_range.1 = confidence_idx + 1;
-                    }
-                };
-                if level + 2 == num_levels {
-                    confidence_idx += 1;
+                    current_node = current_node.children.last_mut().unwrap();
                 }
-                current_node = current_node.children.last_mut().unwrap();
-            }
-            current_node.add_child(TreeNode::new(
-                current_node.label.to_owned(),
-                num_levels,
-                confidence_idx - 1,
-            ));
-            current_node.confidence_range.1 = confidence_idx;
+                current_node.add_child(TreeNode::new(
+                    current_node.label.to_owned(),
+                    confidence_idx - 1,
+                    NodeType::Sequence,
+                ));
+                current_node.confidence_range.1 = confidence_idx;
 
-            sequence_map.entry(sequence.clone()).or_default().push(idx);
+                sequence_map.entry(sequence.clone()).or_default().push(idx);
 
-            sequence.windows(8).for_each(|vals| {
-                if let Some(k_mer) = vals
-                    .iter()
-                    .enumerate()
-                    .map(|(j, v)| map_four_to_two_bit_repr(*v).map(|c| c << (14 - j * 2)))
-                    .fold_options(0_u16, |acc, c| acc | c)
-                {
+                sequence.windows(8).for_each(|vals| {
+                    if let Some(k_mer) = vals
+                        .iter()
+                        .enumerate()
+                        .map(|(j, v)| map_four_to_two_bit_repr(*v).map(|c| c << (14 - j * 2)))
+                        .fold_options(0_u16, |acc, c| acc | c)
+                    {
                         k_mer_map[k_mer as usize].push(idx);
-                }
-            });
-            Ok(())
-        }).collect::<Result<Vec<()>>>()?;
+                    }
+                });
+                Ok(())
+            })
+            .collect::<Result<Vec<()>>>()?;
         root.confidence_range.1 = confidence_idx;
         let (sorted_lineages, _): (Vec<String>, Vec<Vec<u8>>) =
             lineage_sequence_pairs.into_iter().unzip();
@@ -183,13 +187,12 @@ impl Tree {
                 .into_par_iter()
                 .map(|seqs| seqs.into_iter().unique().sorted().collect_vec())
                 .collect(),
-            num_levels,
             num_tips: confidence_idx,
         })
     }
 
     pub fn print(&self) {
-        self.root.print();
+        self.root.print(0);
     }
 
     #[time("info")]
@@ -212,36 +215,43 @@ impl Tree {
         Ok(decoded)
     }
 
-    pub fn get_shared_exact_match(&self, num_shared: usize) -> Vec<f64> {
-        let mut values = vec![1.0; self.num_levels - 2];
+    pub fn get_shared_exact_match(&self, num_levels: usize, num_shared: usize) -> Vec<f64> {
+        let mut values = vec![1.0; num_levels];
         values.push(1.0 / num_shared as f64);
         values
     }
 
     fn is_inner_taxon_node(&self, node: &TreeNode) -> bool {
-        node.level < self.num_levels - 1
+        node.node_type == NodeType::Inner
     }
 
     fn is_taxon_leaf(&self, node: &TreeNode) -> bool {
-        node.level == self.num_levels - 1
+        node.node_type == NodeType::Taxon
     }
+}
+
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+enum NodeType {
+    Inner,
+    Taxon,
+    Sequence,
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TreeNode {
     label: String,
-    level: usize,
     confidence_range: (usize, usize),
     children: Vec<TreeNode>,
+    node_type: NodeType,
 }
 
 impl TreeNode {
-    fn new(label: String, level: usize, confidence_idx: usize) -> Self {
+    fn new(label: String, confidence_idx: usize, node_type: NodeType) -> Self {
         Self {
             label,
-            level,
             confidence_range: (confidence_idx, confidence_idx + 1),
             children: vec![],
+            node_type,
         }
     }
 
@@ -256,15 +266,15 @@ impl TreeNode {
         }
     }
 
-    fn print(&self) {
+    fn print(&self, depth: usize) {
         println!(
             "{}{} {:?}",
-            "  ".repeat(self.level),
+            "  ".repeat(depth),
             self.label,
             self.confidence_range
         );
         for child in &self.children {
-            child.print();
+            child.print(depth + 1);
         }
     }
 }
@@ -308,6 +318,58 @@ mod tests {
                 (
                     &"Animalia,Chordata,Mammalia,Primates,Hominidae,Pan".into(),
                     vec![0.81, 0.81, 0.81, 0.01, 0.01, 0.01,],
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_variable_lineage_length() {
+        let lineages = vec![
+            String::from("Animalia,Chordata,Mammalia,Primates,Hominidae,Homo,Homo_sapiens"),
+            "Animalia,Chordata,Mammalia,Primates,Hominidae,Pan".into(),
+            "Animalia,Chordata,Mammalia,Carnivora,Canidae,Canis".into(),
+            "Animalia,Chordata,Mammalia,Carnivora,Doggo".into(),
+            "Animalia,Chordata,Mammalia,Mouse".into(),
+            "Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis".into(),
+            "Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis".into(),
+        ];
+        let sequences = vec![
+            [0b00].repeat(9),
+            [0b00].repeat(9),
+            [0b00].repeat(9),
+            [0b00].repeat(9),
+            [0b00].repeat(9),
+            [0b00].repeat(9),
+            [0b00].repeat(9),
+        ];
+        let tree = Tree::new(lineages, sequences).unwrap();
+        let confidence_values = &[0.05, 0.1, 0.3, 0.4, 0.1, 0.004, 0.004];
+        tree.print();
+        let lineage = Lineage::new(&tree, confidence_values);
+        let result = lineage.evaluate();
+        assert_eq!(
+            result,
+            vec![
+                (
+                    &String::from("Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis"),
+                    vec![0.96, 0.96, 0.96, 0.85, 0.7, 0.7,],
+                ),
+                (
+                    &"Animalia,Chordata,Mammalia,Carnivora,Doggo".into(),
+                    vec![0.96, 0.96, 0.96, 0.85, 0.1,],
+                ),
+                (
+                    &"Animalia,Chordata,Mammalia,Carnivora,Canidae,Canis".into(),
+                    vec![0.96, 0.96, 0.96, 0.85, 0.05, 0.05,],
+                ),
+                (
+                    &"Animalia,Chordata,Mammalia,Mouse".into(),
+                    vec![0.96, 0.96, 0.96, 0.1],
+                ),
+                (
+                    &"Animalia,Chordata,Mammalia,Primates,Hominidae,Pan".into(),
+                    vec![0.96, 0.96, 0.96, 0.01, 0.01, 0.01,],
                 ),
             ]
         );
