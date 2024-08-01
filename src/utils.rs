@@ -89,10 +89,10 @@ pub fn decompress_sequences(sequences: &[Vec<u8>]) -> Vec<String> {
         .map(|s| {
             s.iter()
                 .map(|c| match c {
-                    0b00 => 'A',
-                    0b01 => 'C',
-                    0b10 => 'G',
-                    0b11 => 'T',
+                    0b0001 => 'A',
+                    0b0010 => 'C',
+                    0b0100 => 'G',
+                    0b1000 => 'T',
                     _ => '-',
                 })
                 .join("")
