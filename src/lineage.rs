@@ -18,7 +18,7 @@ use crate::utils::{self, map_four_to_two_bit_repr};
 pub struct Lineage<'a> {
     tree: &'a Tree,
     confidence_prefix_sum: Vec<f64>,
-    confidence_vectors: Vec<(usize, Vec<f64>)>,
+    confidence_vectors: Vec<(usize, Vec<f64>, Vec<f64>)>,
     rounding_factor: f64,
 }
 
@@ -38,12 +38,36 @@ impl<'a> Lineage<'a> {
     }
 
     #[time("debug")]
-    pub fn evaluate(mut self) -> Vec<(&'a String, Vec<f64>)> {
-        self.eval_recurse(&self.tree.root, &[]);
+    pub fn evaluate(mut self) -> Vec<(&'a String, Vec<f64>, f64)> {
+        self.eval_recurse(&self.tree.root, &[], &[]);
         self.confidence_vectors
             .into_iter()
             .sorted_by(|a, b| b.1.iter().partial_cmp(a.1.iter()).unwrap())
-            .map(|(idx, conf_values)| (&self.tree.lineages[idx], conf_values))
+            .map(|(idx, conf_values, expected_conf_values)| {
+                let start_index = expected_conf_values
+                    .iter()
+                    .find_position(|&&x| 1.0 - x > std::f64::EPSILON)
+                    .unwrap()
+                    .0;
+                let stop_index = conf_values.len() - 1;
+                let conf_norm = conf_values[start_index..stop_index]
+                    .iter()
+                    .map(|x| x * x)
+                    .sum::<f64>()
+                    .sqrt();
+                let expected_norm = expected_conf_values[start_index..stop_index]
+                    .iter()
+                    .map(|x| x * x)
+                    .sum::<f64>()
+                    .sqrt();
+                let secondary_conf = conf_values[start_index..stop_index]
+                    .iter()
+                    .zip(expected_conf_values[start_index..stop_index].iter())
+                    .map(|(a, b)| (a * b))
+                    .sum::<f64>()
+                    / (conf_norm * expected_norm);
+                (&self.tree.lineages[idx], conf_values, 1.0 - secondary_conf)
+            })
             .collect_vec()
     }
 
@@ -52,10 +76,16 @@ impl<'a> Lineage<'a> {
             - self.confidence_prefix_sum[node.confidence_range.0]
     }
 
-    fn eval_recurse(&mut self, node: &TreeNode, confidence_prefix: &[f64]) {
+    fn eval_recurse(
+        &mut self,
+        node: &TreeNode,
+        confidence_prefix: &[f64],
+        expected_confidence_prefix: &[f64],
+    ) {
         let mut no_child_significant = true;
         for c in &node.children {
             let mut conf_prefix = confidence_prefix.to_vec();
+            let mut expected_conf_prefix = expected_confidence_prefix.to_vec();
             let child_conf =
                 (self.get_confidence(c) * self.rounding_factor).round() / self.rounding_factor;
             if child_conf == 0.0 {
@@ -63,14 +93,21 @@ impl<'a> Lineage<'a> {
             }
             no_child_significant = false;
             conf_prefix.push(child_conf);
-            self.eval_recurse(c, &conf_prefix);
+            expected_conf_prefix.push(
+                (c.confidence_range.1 - c.confidence_range.0) as f64 / self.tree.num_tips as f64,
+            );
+            self.eval_recurse(c, &conf_prefix, &expected_conf_prefix);
             if self.tree.is_taxon_leaf(c) {
-                self.confidence_vectors
-                    .push((c.confidence_range.0, conf_prefix));
+                self.confidence_vectors.push((
+                    c.confidence_range.0,
+                    conf_prefix,
+                    expected_conf_prefix,
+                ));
             }
         }
         if no_child_significant && self.tree.is_inner_taxon_node(node) {
             let mut conf_prefix = confidence_prefix.to_vec();
+            let mut expected_conf_prefix = expected_confidence_prefix.to_vec();
             let mut current_node = node;
             while self.tree.is_inner_taxon_node(current_node) {
                 current_node = current_node
@@ -83,9 +120,16 @@ impl<'a> Lineage<'a> {
                     })
                     .unwrap();
                 conf_prefix.push(1.0 / self.rounding_factor);
+                expected_conf_prefix.push(
+                    (current_node.confidence_range.1 - current_node.confidence_range.0) as f64
+                        / self.tree.num_tips as f64,
+                );
             }
-            self.confidence_vectors
-                .push((current_node.confidence_range.0, conf_prefix));
+            self.confidence_vectors.push((
+                current_node.confidence_range.0,
+                conf_prefix,
+                expected_conf_prefix,
+            ));
         }
     }
 }
@@ -281,6 +325,8 @@ impl TreeNode {
 
 #[cfg(test)]
 mod tests {
+    use itertools::Itertools;
+
     use crate::lineage::{Lineage, Tree};
 
     #[test]
@@ -305,7 +351,7 @@ mod tests {
         let lineage = Lineage::new(&tree, confidence_values);
         let result = lineage.evaluate();
         assert_eq!(
-            result,
+            result.into_iter().map(|(a, b, _)| (a, b)).collect_vec(),
             vec![
                 (
                     &String::from("Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis"),
@@ -348,8 +394,9 @@ mod tests {
         tree.print();
         let lineage = Lineage::new(&tree, confidence_values);
         let result = lineage.evaluate();
+        dbg!(&result);
         assert_eq!(
-            result,
+            result.into_iter().map(|(a, b, _)| (a, b)).collect_vec(),
             vec![
                 (
                     &String::from("Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis"),
@@ -389,7 +436,7 @@ mod tests {
         let lineage = Lineage::new(&tree, confidence_values);
         let result = lineage.evaluate();
         assert_eq!(
-            result,
+            result.into_iter().map(|(a, b, _)| (a, b)).collect_vec(),
             vec![(
                 &String::from("Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis_ferrocius"),
                 vec![0.01, 0.01, 0.01, 0.01, 0.01, 0.01,],

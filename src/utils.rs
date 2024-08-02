@@ -57,7 +57,7 @@ pub fn get_reader(path: &PathBuf) -> Result<Box<dyn Read>> {
 }
 
 pub fn output_results(
-    results: &[(&String, Vec<(&String, Vec<f64>)>)],
+    results: &[(&String, Vec<(&String, Vec<f64>, f64)>)],
     mut output: Box<dyn Write>,
 ) -> Result<()> {
     let output_lines: Vec<String> = results
@@ -65,15 +65,16 @@ pub fn output_results(
         .map(|(query_label, confidence_vec)| {
             confidence_vec
                 .iter()
-                .map(|(label, values)| {
+                .map(|(label, values, conf)| {
                     format!(
-                        "{}\t{}\t{}",
+                        "{}\t{}\t{}\t{:.5}",
                         query_label,
                         label,
                         values
                             .iter()
                             .map(|v| format!("{1:.0$}", F64_OUTPUT_ACCURACY as usize, v))
-                            .join(",")
+                            .join(","),
+                        conf,
                     )
                 })
                 .join("\n")
@@ -101,7 +102,7 @@ pub fn decompress_sequences(sequences: &[Vec<u8>]) -> Vec<String> {
 }
 
 pub fn output_results_tsv(
-    results: &[(&String, Vec<(&String, Vec<f64>)>)],
+    results: &[(&String, Vec<(&String, Vec<f64>, f64)>)],
     sequences: Vec<String>,
     mut output: Box<dyn Write>,
 ) -> Result<()> {
@@ -111,9 +112,9 @@ pub fn output_results_tsv(
         .map(|((query_label, confidence_vec), sequence)| {
             confidence_vec
                 .iter()
-                .map(|(label, values)| {
+                .map(|(label, values, conf)| {
                     format!(
-                        "{}\t{}\t{}",
+                        "{}\t{}\t{:.5}\t{}",
                         query_label,
                         label
                             .split(',')
@@ -124,6 +125,7 @@ pub fn output_results_tsv(
                                     .map(|v| format!("{1:.0$}", F64_OUTPUT_ACCURACY as usize, v))
                             )
                             .join("\t"),
+                        conf,
                         sequence
                     )
                 })

@@ -13,7 +13,7 @@ pub fn raxtax<'a, 'b>(
     (query_labels, query_sequences): &'b (Vec<String>, Vec<Vec<u8>>),
     tree: &'a lineage::Tree,
     skip_exact_matches: bool,
-) -> Vec<(&'b String, Vec<(&'a String, Vec<f64>)>)> {
+) -> Vec<(&'b String, Vec<(&'a String, Vec<f64>, f64)>)> {
     let warnings = AtomicBool::new(false);
     let results = query_labels
         .par_iter()
@@ -42,7 +42,8 @@ pub fn raxtax<'a, 'b>(
                                 .map(|&idx| {
                                     (
                                         &tree.lineages[idx],
-                                        tree.get_shared_exact_match(tree.lineages[idx].chars().filter(|c| *c == ',').count(), label_idxs.len())
+                                        tree.get_shared_exact_match(tree.lineages[idx].chars().filter(|c| *c == ',').count(), label_idxs.len()),
+                                        1.0,
                                     )
                                 })
                                 .collect_vec(),
@@ -74,7 +75,7 @@ pub fn raxtax<'a, 'b>(
                 lineage::Lineage::new(tree, &higest_hit_probs).evaluate(),
             )
         })
-        .collect::<Vec<(usize, &String, Vec<(&String, Vec<f64>)>)>>()
+        .collect::<Vec<(usize, &String, Vec<(&String, Vec<f64>, f64)>)>>()
         .into_iter()
         .sorted_by_key(|(i, _, _)| *i)
         .map(|(_, q, v)| (q, v))
