@@ -12,8 +12,12 @@ use raxtax::utils;
 
 fn main() {
     let args = io::Args::parse();
-    let (output, tsv_output, log_output) = match args.get_output() {
-        Ok((output, tsv_output, log_output)) => (output, tsv_output, log_output),
+    let io::OutputWriters {
+        primary: output,
+        tsv: tsv_output,
+        log: log_output,
+    } = match args.get_output() {
+        Ok(writers) => writers,
         Err(e) => {
             if args.verbosity.log_level_filter() >= Level::Error {
                 eprintln!("\x1b[31m[ERROR]\x1b[0m {}", e);

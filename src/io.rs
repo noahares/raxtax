@@ -7,6 +7,12 @@ use std::{
     path::PathBuf,
 };
 
+pub struct OutputWriters {
+    pub primary: Box<dyn Write>,
+    pub tsv: Option<Box<dyn Write>>,
+    pub log: Box<dyn Write + Send>,
+}
+
 #[derive(Parser)]
 #[command(author, version, about)]
 pub struct Args {
@@ -40,13 +46,7 @@ pub struct Args {
 }
 
 impl Args {
-    pub fn get_output(
-        &self,
-    ) -> Result<(
-        Box<dyn Write>,
-        Option<Box<dyn Write>>,
-        Box<dyn Write + Send>,
-    )> {
+    pub fn get_output(&self) -> Result<OutputWriters> {
         let prefix = self
             .prefix
             .clone()
@@ -65,11 +65,11 @@ impl Args {
             None
         };
         let log_output = prefix.join("raxtax.log");
-        Ok((
-            std::fs::File::create(result_output).map(|f| Box::new(f) as Box<dyn Write>)?,
-            tsv_output,
-            std::fs::File::create(log_output).map(|f| Box::new(f) as Box<dyn Write + Send>)?,
-        ))
+        Ok(OutputWriters {
+            primary: std::fs::File::create(result_output).map(|f| Box::new(f) as Box<dyn Write>)?,
+            tsv: tsv_output,
+            log: std::fs::File::create(log_output).map(|f| Box::new(f) as Box<dyn Write + Send>)?,
+        })
     }
 
     pub fn get_db_output(&self) -> Result<Box<dyn Write>> {
