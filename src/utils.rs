@@ -9,6 +9,8 @@ use anyhow::{bail, Result};
 use flate2::read::GzDecoder;
 use itertools::Itertools;
 
+use crate::lineage;
+
 pub const F64_OUTPUT_ACCURACY: u32 = 2;
 
 pub fn map_four_to_two_bit_repr(c: u8) -> Option<u16> {
@@ -57,26 +59,15 @@ pub fn get_reader(path: &PathBuf) -> Result<Box<dyn Read>> {
 }
 
 pub fn output_results(
-    results: &[(&String, Vec<(&String, Vec<f64>, f64)>)],
+    results: &[Vec<lineage::EvaluationResult<'_, '_>>],
     mut output: Box<dyn Write>,
 ) -> Result<()> {
     let output_lines: Vec<String> = results
         .iter()
-        .map(|(query_label, confidence_vec)| {
-            confidence_vec
+        .map(|eval_results| {
+            eval_results
                 .iter()
-                .map(|(label, values, conf)| {
-                    format!(
-                        "{}\t{}\t{}\t{:.5}",
-                        query_label,
-                        label,
-                        values
-                            .iter()
-                            .map(|v| format!("{1:.0$}", F64_OUTPUT_ACCURACY as usize, v))
-                            .join(","),
-                        conf,
-                    )
-                })
+                .map(|er| er.get_output_string())
                 .join("\n")
         })
         .collect_vec();
@@ -102,33 +93,17 @@ pub fn decompress_sequences(sequences: &[Vec<u8>]) -> Vec<String> {
 }
 
 pub fn output_results_tsv(
-    results: &[(&String, Vec<(&String, Vec<f64>, f64)>)],
+    results: &[Vec<lineage::EvaluationResult<'_, '_>>],
     sequences: Vec<String>,
     mut output: Box<dyn Write>,
 ) -> Result<()> {
     let output_lines: Vec<String> = results
         .iter()
         .zip_eq(sequences)
-        .map(|((query_label, confidence_vec), sequence)| {
-            confidence_vec
+        .map(|(eval_results, sequence)| {
+            eval_results
                 .iter()
-                .map(|(label, values, conf)| {
-                    format!(
-                        "{}\t{}\t{:.5}\t{}",
-                        query_label,
-                        label
-                            .split(',')
-                            .map(|s| s.to_string())
-                            .interleave(
-                                values
-                                    .iter()
-                                    .map(|v| format!("{1:.0$}", F64_OUTPUT_ACCURACY as usize, v))
-                            )
-                            .join("\t"),
-                        conf,
-                        sequence
-                    )
-                })
+                .map(|er| er.get_tsv_string(&sequence))
                 .join("\n")
         })
         .collect_vec();

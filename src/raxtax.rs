@@ -13,7 +13,7 @@ pub fn raxtax<'a, 'b>(
     (query_labels, query_sequences): &'b (Vec<String>, Vec<Vec<u8>>),
     tree: &'a lineage::Tree,
     skip_exact_matches: bool,
-) -> Vec<(&'b String, Vec<(&'a String, Vec<f64>, f64)>)> {
+) -> Vec<Vec<lineage::EvaluationResult<'a, 'b>>> {
     let warnings = AtomicBool::new(false);
     let results = query_labels
         .par_iter()
@@ -37,14 +37,15 @@ pub fn raxtax<'a, 'b>(
                     }
                     return (
                         i,
-                        query_label,
                             label_idxs.iter()
                                 .map(|&idx| {
-                                    (
-                                        &tree.lineages[idx],
-                                        tree.get_shared_exact_match(tree.lineages[idx].chars().filter(|c| *c == ',').count(), label_idxs.len()),
-                                        1.0,
-                                    )
+                                    lineage::EvaluationResult{
+                                        query_label,
+                                        lineage: &tree.lineages[idx],
+                                        confidence_values: tree.get_shared_exact_match(tree.lineages[idx].chars().filter(|c| *c == ',').count(), label_idxs.len()),
+                                        local_signal: 1.0,
+                                        global_signal: 1.0
+                                    }
                                 })
                                 .collect_vec(),
                     );
@@ -71,14 +72,13 @@ pub fn raxtax<'a, 'b>(
             let higest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len(), num_trials, &intersect_buffer);
             (
                 i,
-                query_label,
-                lineage::Lineage::new(tree, &higest_hit_probs).evaluate(),
+                lineage::Lineage::new(query_label, tree, &higest_hit_probs).evaluate(),
             )
         })
-        .collect::<Vec<(usize, &String, Vec<(&String, Vec<f64>, f64)>)>>()
+        .collect::<Vec<(usize, Vec<lineage::EvaluationResult<'a, 'b>>)>>()
         .into_iter()
-        .sorted_by_key(|(i, _, _)| *i)
-        .map(|(_, q, v)| (q, v))
+        .sorted_by_key(|(i, _)| *i)
+        .map(|(_, v)| v)
         .collect_vec();
 
     if warnings.into_inner() && log_enabled!(Level::Warn) {

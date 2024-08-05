@@ -15,22 +15,70 @@ use serde::{Deserialize, Serialize};
 
 use crate::utils::{self, map_four_to_two_bit_repr};
 
-pub struct Lineage<'a> {
+#[derive(Debug)]
+pub struct EvaluationResult<'a, 'b> {
+    pub query_label: &'b String,
+    pub lineage: &'a String,
+    pub confidence_values: Vec<f64>,
+    pub local_signal: f64,
+    pub global_signal: f64,
+}
+
+impl EvaluationResult<'_, '_> {
+    pub fn get_output_string(&self) -> String {
+        format!(
+            "{}\t{}\t{}\t{:.5}\t{:.5}",
+            self.query_label,
+            self.lineage,
+            self.confidence_values
+                .iter()
+                .map(|v| format!("{1:.0$}", utils::F64_OUTPUT_ACCURACY as usize, v))
+                .join(","),
+            self.local_signal,
+            self.global_signal
+        )
+    }
+
+    pub fn get_tsv_string(&self, sequence: &String) -> String {
+        format!(
+            "{}\t{}\t{:.5}\t{:.5}\t{}",
+            self.query_label,
+            self.lineage
+                .split(',')
+                .map(|s| s.to_string())
+                .interleave(self.confidence_values.iter().map(|v| format!(
+                    "{1:.0$}",
+                    utils::F64_OUTPUT_ACCURACY as usize,
+                    v
+                )))
+                .join("\t"),
+            self.local_signal,
+            self.global_signal,
+            sequence
+        )
+    }
+}
+
+pub struct Lineage<'a, 'b> {
+    query_label: &'b String,
     tree: &'a Tree,
+    confidence_values: Vec<f64>,
     confidence_prefix_sum: Vec<f64>,
     confidence_vectors: Vec<(usize, Vec<f64>, Vec<f64>)>,
     rounding_factor: f64,
 }
 
-impl<'a> Lineage<'a> {
-    pub fn new(tree: &'a Tree, confidence_values: &[f64]) -> Self {
+impl<'a, 'b> Lineage<'a, 'b> {
+    pub fn new(query_label: &'b String, tree: &'a Tree, confidence_values: &[f64]) -> Self {
         let mut confidence_prefix_sum = vec![0.0];
         confidence_prefix_sum.extend(confidence_values.iter().scan(0.0, |sum, i| {
             *sum += i;
             Some(*sum)
         }));
         Self {
+            query_label,
             tree,
+            confidence_values: confidence_values.to_vec(),
             confidence_prefix_sum,
             confidence_vectors: Vec::new(),
             rounding_factor: 10_u32.pow(utils::F64_OUTPUT_ACCURACY) as f64,
@@ -38,8 +86,14 @@ impl<'a> Lineage<'a> {
     }
 
     #[time("debug")]
-    pub fn evaluate(mut self) -> Vec<(&'a String, Vec<f64>, f64)> {
+    pub fn evaluate(mut self) -> Vec<EvaluationResult<'a, 'b>> {
         self.eval_recurse(&self.tree.root, &[], &[]);
+        let leaf_confidence = self
+            .confidence_values
+            .iter()
+            .map(|&v| (v - 1.0 / self.tree.num_tips as f64).powi(2))
+            .sum::<f64>()
+            .sqrt();
         self.confidence_vectors
             .into_iter()
             .sorted_by(|a, b| b.1.iter().partial_cmp(a.1.iter()).unwrap())
@@ -49,24 +103,29 @@ impl<'a> Lineage<'a> {
                     .find_position(|&&x| 1.0 - x > std::f64::EPSILON)
                     .unwrap()
                     .0;
-                let stop_index = conf_values.len() - 1;
-                let conf_norm = conf_values[start_index..stop_index]
+                let conf_norm = conf_values[start_index..]
                     .iter()
                     .map(|x| x * x)
                     .sum::<f64>()
                     .sqrt();
-                let expected_norm = expected_conf_values[start_index..stop_index]
+                let expected_norm = expected_conf_values[start_index..]
                     .iter()
                     .map(|x| x * x)
                     .sum::<f64>()
                     .sqrt();
-                let secondary_conf = conf_values[start_index..stop_index]
+                let secondary_conf = conf_values[start_index..]
                     .iter()
-                    .zip(expected_conf_values[start_index..stop_index].iter())
+                    .zip(expected_conf_values[start_index..].iter())
                     .map(|(a, b)| (a * b))
                     .sum::<f64>()
                     / (conf_norm * expected_norm);
-                (&self.tree.lineages[idx], conf_values, 1.0 - secondary_conf)
+                EvaluationResult {
+                    query_label: self.query_label,
+                    lineage: &self.tree.lineages[idx],
+                    confidence_values: conf_values,
+                    local_signal: 1.0 - secondary_conf,
+                    global_signal: leaf_confidence,
+                }
             })
             .collect_vec()
     }
@@ -327,7 +386,7 @@ impl TreeNode {
 mod tests {
     use itertools::Itertools;
 
-    use crate::lineage::{Lineage, Tree};
+    use crate::lineage::{EvaluationResult, Lineage, Tree};
 
     #[test]
     fn test_tree_construction() {
@@ -348,10 +407,20 @@ mod tests {
         let tree = Tree::new(lineages, sequences).unwrap();
         let confidence_values = &[0.1, 0.3, 0.4, 0.004, 0.004];
         tree.print();
-        let lineage = Lineage::new(&tree, confidence_values);
+        let query_label = String::from("q");
+        let lineage = Lineage::new(&query_label, &tree, confidence_values);
         let result = lineage.evaluate();
         assert_eq!(
-            result.into_iter().map(|(a, b, _)| (a, b)).collect_vec(),
+            result
+                .into_iter()
+                .map(
+                    |EvaluationResult {
+                         lineage,
+                         confidence_values,
+                         ..
+                     }| (lineage, confidence_values)
+                )
+                .collect_vec(),
             vec![
                 (
                     &String::from("Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis"),
@@ -392,11 +461,21 @@ mod tests {
         let tree = Tree::new(lineages, sequences).unwrap();
         let confidence_values = &[0.05, 0.1, 0.3, 0.4, 0.1, 0.004, 0.004];
         tree.print();
-        let lineage = Lineage::new(&tree, confidence_values);
+        let query_label = String::from("q");
+        let lineage = Lineage::new(&query_label, &tree, confidence_values);
         let result = lineage.evaluate();
         dbg!(&result);
         assert_eq!(
-            result.into_iter().map(|(a, b, _)| (a, b)).collect_vec(),
+            result
+                .into_iter()
+                .map(
+                    |EvaluationResult {
+                         lineage,
+                         confidence_values,
+                         ..
+                     }| (lineage, confidence_values)
+                )
+                .collect_vec(),
             vec![
                 (
                     &String::from("Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis"),
@@ -433,10 +512,20 @@ mod tests {
         let tree = Tree::new(lineages, sequences).unwrap();
         let confidence_values = &[0.004, 0.004, 0.004];
         tree.print();
-        let lineage = Lineage::new(&tree, confidence_values);
+        let query_label = String::from("q");
+        let lineage = Lineage::new(&query_label, &tree, confidence_values);
         let result = lineage.evaluate();
         assert_eq!(
-            result.into_iter().map(|(a, b, _)| (a, b)).collect_vec(),
+            result
+                .into_iter()
+                .map(
+                    |EvaluationResult {
+                         lineage,
+                         confidence_values,
+                         ..
+                     }| (lineage, confidence_values)
+                )
+                .collect_vec(),
             vec![(
                 &String::from("Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis_ferrocius"),
                 vec![0.01, 0.01, 0.01, 0.01, 0.01, 0.01,],
