@@ -88,12 +88,15 @@ impl<'a, 'b> Lineage<'a, 'b> {
     #[time("debug")]
     pub fn evaluate(mut self) -> Vec<EvaluationResult<'a, 'b>> {
         self.eval_recurse(&self.tree.root, &[], &[]);
-        let leaf_confidence = self
-            .confidence_values
-            .iter()
-            .map(|&v| (v - 1.0 / self.tree.num_tips as f64).powi(2))
-            .sum::<f64>()
-            .sqrt();
+        // NOTE: This would be the correct maximum leaf confidence and ideally we would normalize with this.
+        // However, because this is already 0.99 for 100 tips, it is not worth it, as it is
+        // basically 1 for any reasonable reference lineage.
+        // let max_leaf_confidence = ((1.0 - 1.0 / self.tree.num_tips as f64).powi(2) + ((self.tree.num_tips as f64 - 1.0) / (self.tree.num_tips as f64).powi(2))).sqrt();
+        let leaf_confidence = utils::euclidean_distance(
+            self.confidence_values
+                .iter()
+                .map(|&v| (v - 1.0 / self.tree.num_tips as f64)),
+        );
         self.confidence_vectors
             .into_iter()
             .sorted_by(|a, b| b.1.iter().partial_cmp(a.1.iter()).unwrap())
@@ -103,22 +106,10 @@ impl<'a, 'b> Lineage<'a, 'b> {
                     .find_position(|&&x| 1.0 - x > std::f64::EPSILON)
                     .unwrap()
                     .0;
-                let conf_norm = conf_values[start_index..]
-                    .iter()
-                    .map(|x| x * x)
-                    .sum::<f64>()
-                    .sqrt();
-                let expected_norm = expected_conf_values[start_index..]
-                    .iter()
-                    .map(|x| x * x)
-                    .sum::<f64>()
-                    .sqrt();
-                let secondary_conf = conf_values[start_index..]
-                    .iter()
-                    .zip(expected_conf_values[start_index..].iter())
-                    .map(|(a, b)| (a * b))
-                    .sum::<f64>()
-                    / (conf_norm * expected_norm);
+                let secondary_conf = utils::cosine_similarity(
+                    &conf_values[start_index..],
+                    &expected_conf_values[start_index..],
+                );
                 EvaluationResult {
                     query_label: self.query_label,
                     lineage: &self.tree.lineages[idx],

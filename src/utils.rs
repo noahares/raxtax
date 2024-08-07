@@ -1,4 +1,5 @@
 use std::{
+    borrow::Borrow,
     collections::HashSet,
     fs::File,
     io::{BufReader, Read, Write},
@@ -109,6 +110,28 @@ pub fn output_results_tsv(
         .collect_vec();
     writeln!(output, "{}", output_lines.into_iter().join("\n"))?;
     Ok(())
+}
+
+pub fn euclidean_distance<I, T>(v: I) -> f64
+where
+    I: IntoIterator<Item = T>,
+    T: std::borrow::Borrow<f64>,
+{
+    v.into_iter()
+        .map(|x| x.borrow() * x.borrow())
+        .sum::<f64>()
+        .sqrt()
+}
+
+pub fn cosine_similarity(vec_a: &[f64], vec_b: &[f64]) -> f64 {
+    let norm_a = euclidean_distance(vec_a.iter());
+    let norm_b = euclidean_distance(vec_b.iter());
+    vec_a
+        .iter()
+        .zip(vec_b.iter())
+        .map(|(a, b)| a * b)
+        .sum::<f64>()
+        / (norm_a * norm_b)
 }
 // #[cfg(test)]
 // mod tests {
