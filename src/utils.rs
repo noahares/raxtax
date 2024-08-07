@@ -112,7 +112,17 @@ pub fn output_results_tsv(
     Ok(())
 }
 
-pub fn euclidean_distance<I, T>(v: I) -> f64
+pub fn euclidean_distance_l1(a: &[f64], b: &[f64]) -> f64 {
+    let a_sum = a.iter().sum::<f64>();
+    let b_sum = b.iter().sum::<f64>();
+    a.iter()
+        .zip(b)
+        .map(|(x, y)| (x / a_sum - y / b_sum).powi(2))
+        .sum::<f64>()
+        .sqrt()
+}
+
+pub fn euclidean_norm<I, T>(v: I) -> f64
 where
     I: IntoIterator<Item = T>,
     T: std::borrow::Borrow<f64>,
@@ -124,8 +134,8 @@ where
 }
 
 pub fn cosine_similarity(vec_a: &[f64], vec_b: &[f64]) -> f64 {
-    let norm_a = euclidean_distance(vec_a.iter());
-    let norm_b = euclidean_distance(vec_b.iter());
+    let norm_a = euclidean_norm(vec_a.iter());
+    let norm_b = euclidean_norm(vec_b.iter());
     vec_a
         .iter()
         .zip(vec_b.iter())

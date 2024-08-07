@@ -92,7 +92,7 @@ impl<'a, 'b> Lineage<'a, 'b> {
         // However, because this is already 0.99 for 100 tips, it is not worth it, as it is
         // basically 1 for any reasonable reference lineage.
         // let max_leaf_confidence = ((1.0 - 1.0 / self.tree.num_tips as f64).powi(2) + ((self.tree.num_tips as f64 - 1.0) / (self.tree.num_tips as f64).powi(2))).sqrt();
-        let leaf_confidence = utils::euclidean_distance(
+        let leaf_confidence = utils::euclidean_norm(
             self.confidence_values
                 .iter()
                 .map(|&v| (v - 1.0 / self.tree.num_tips as f64)),
@@ -106,7 +106,7 @@ impl<'a, 'b> Lineage<'a, 'b> {
                     .find_position(|&&x| 1.0 - x > std::f64::EPSILON)
                     .unwrap()
                     .0;
-                let secondary_conf = utils::cosine_similarity(
+                let secondary_conf = utils::euclidean_distance_l1(
                     &conf_values[start_index..],
                     &expected_conf_values[start_index..],
                 );
@@ -114,7 +114,7 @@ impl<'a, 'b> Lineage<'a, 'b> {
                     query_label: self.query_label,
                     lineage: &self.tree.lineages[idx],
                     confidence_values: conf_values,
-                    local_signal: 1.0 - secondary_conf,
+                    local_signal: secondary_conf,
                     global_signal: leaf_confidence,
                 }
             })
