@@ -1,5 +1,3 @@
-use std::sync::atomic::AtomicBool;
-
 use crate::lineage;
 use crate::{prob, utils};
 use indicatif::{ParallelProgressIterator, ProgressStyle};
@@ -56,10 +54,15 @@ pub fn raxtax<'a, 'b>(
                 exact_matches.iter().for_each(|&id| unsafe { *intersect_buffer.get_unchecked_mut(id) = 0 });
             }
             let highest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len(), num_trials, &intersect_buffer);
-            (
-                i,
-                lineage::Lineage::new(query_label, tree, &highest_hit_probs).evaluate(),
-            )
+            let eval_res = lineage::Lineage::new(query_label, tree, &highest_hit_probs).evaluate();
+            if let [idx] = exact_matches[..] {
+                assert!(!eval_res.is_empty());
+                let mut best_hit = eval_res[0].clone();
+                best_hit.confidence_values = tree.get_shared_exact_match(tree.lineages[idx].chars().filter(|c| *c == ',').count(), 1);
+                (i, vec![best_hit])
+            } else {
+                (i, eval_res)
+            }
         })
         .collect::<Vec<(usize, Vec<lineage::EvaluationResult<'a, 'b>>)>>()
         .into_iter()

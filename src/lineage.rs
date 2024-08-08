@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::utils::{self, map_four_to_two_bit_repr};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EvaluationResult<'a, 'b> {
     pub query_label: &'b String,
     pub lineage: &'a String,
