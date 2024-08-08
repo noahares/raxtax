@@ -49,13 +49,9 @@ pub fn highest_hit_prob_per_reference(
                 .iter()
                 .map(|(&&size, &count)| {
                     let x = unsafe { *cmfs[&size].get_unchecked(i) };
-                    if x == 0.0 {
-                        1.0
-                    } else {
-                        x.powi(count as i32)
-                    }
+                    (count as f64) * x.ln()
                 })
-                .product::<f64>()
+                .sum::<f64>()
         })
         .collect_vec();
     let highest_hit_probs: HashMap<usize, f64> = pmfs
@@ -68,10 +64,10 @@ pub fn highest_hit_prob_per_reference(
                     .zip_eq(cmf_prod_components.iter())
                     .map(|((j, pmf), prod_components)| {
                         let x = unsafe { *cmfs[i].get_unchecked(j) };
-                        if x == 0.0 {
-                            pmf * prod_components
+                        if x == 0.0 || *prod_components == f64::NEG_INFINITY {
+                            0.0
                         } else {
-                            pmf * prod_components / x
+                            (pmf.ln() + prod_components - x.ln()).exp()
                         }
                     })
                     .sum::<f64>(),
@@ -131,11 +127,8 @@ mod tests {
 
     #[test]
     fn test_hit_prob() {
-        let probs = highest_hit_prob_per_reference(200, 32, &(0..=200).step_by(10).collect_vec());
-        let sum = probs.iter().sum::<f64>();
-        dbg!(sum);
-        let normalized_probs = probs.iter().map(|v| v / sum).collect_vec();
-        dbg!(&normalized_probs);
-        assert_almost_eq!(normalized_probs.iter().sum::<f64>(), 1.0, 1e-7);
+        let probs = highest_hit_prob_per_reference(400, 200, &(0..=400).collect_vec());
+        dbg!(&probs);
+        assert_almost_eq!(probs.iter().sum::<f64>(), 1.0, 1e-7);
     }
 }
