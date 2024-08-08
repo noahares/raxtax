@@ -1,5 +1,4 @@
 use std::{
-    borrow::Borrow,
     collections::HashSet,
     fs::File,
     io::{BufReader, Read, Write},
@@ -115,6 +114,8 @@ pub fn output_results_tsv(
 pub fn euclidean_distance_l1(a: &[f64], b: &[f64]) -> f64 {
     let a_sum = a.iter().sum::<f64>();
     let b_sum = b.iter().sum::<f64>();
+    assert!(a_sum > 0.0);
+    assert!(b_sum > 0.0);
     a.iter()
         .zip(b)
         .map(|(x, y)| (x / a_sum - y / b_sum).powi(2))
@@ -136,6 +137,8 @@ where
 pub fn cosine_similarity(vec_a: &[f64], vec_b: &[f64]) -> f64 {
     let norm_a = euclidean_norm(vec_a.iter());
     let norm_b = euclidean_norm(vec_b.iter());
+    assert!(norm_a > 0.0);
+    assert!(norm_b > 0.0);
     vec_a
         .iter()
         .zip(vec_b.iter())
@@ -143,45 +146,38 @@ pub fn cosine_similarity(vec_a: &[f64], vec_b: &[f64]) -> f64 {
         .sum::<f64>()
         / (norm_a * norm_b)
 }
-// #[cfg(test)]
-// mod tests {
-//     use crate::parser::parse_reference_fasta_str;
-//
-//     #[test]
-//     fn test_accumulation() {
-//         let fasta_str = r">Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species1;
-// AAACCCTTTGGGA
-// >Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species2;
-// ATACGCTTTGGGA
-// >Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order4,f:Family5,g:Genus2,s:Species3;
-// ATCCGCTATGGGA
-// >Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order2,f:Family3,g:Genus3,s:Species6;
-// ATACGCTTTGCGT
-// >Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order3,f:Family4,g:Genus4,s:Species5;
-// ATACGCTTTGCGT";
-//         let lookup_table = parse_reference_fasta_str(fasta_str).unwrap();
-//         let hit_buffer = [1.0 / 8.0, 2.0 / 8.0, 0.0, 2.0 / 8.0, 3.0 / 8.0];
-//         let results = accumulate_results(&lookup_table, &hit_buffer);
-//         assert_eq!(
-//             results,
-//             Some(vec![
-//                 (
-//                     &"Phylum1|Class1|Order1|Family1|Genus1|Species2".to_string(),
-//                     vec![1.0_f64, 1.0, 0.38, 0.38, 0.38, 0.25],
-//                 ),
-//                 (
-//                     &"Phylum1|Class1|Order1|Family1|Genus1|Species1".into(),
-//                     vec![1.0_f64, 1.0, 0.38, 0.38, 0.38, 0.13],
-//                 ),
-//                 (
-//                     &"Phylum1|Class1|Order2|Family3|Genus3|Species6".into(),
-//                     vec![1.0_f64, 1.0, 0.38, 0.38, 0.38, 0.38],
-//                 ),
-//                 (
-//                     &"Phylum1|Class1|Order3|Family4|Genus4|Species5".into(),
-//                     vec![1.0_f64, 1.0, 0.25, 0.25, 0.25, 0.25],
-//                 ),
-//             ])
-//         );
-//     }
-// }
+
+#[cfg(test)]
+mod tests {
+    use statrs::assert_almost_eq;
+
+    use crate::utils::{cosine_similarity, euclidean_distance_l1, euclidean_norm};
+
+    #[test]
+    fn test_euclidean_norm() {
+        let v = [1.0, 2.0, 3.0, 4.0];
+        assert_almost_eq!(euclidean_norm(v.iter()), 30_f64.sqrt(), 1e-7);
+        let w = [0.5, 0.5, 0.25, 0.2];
+        assert_almost_eq!(euclidean_norm(w.iter()), 0.6025_f64.sqrt(), 1e-7);
+    }
+
+    #[test]
+    fn test_euclidean_distance() {
+        let v = [1.0, 0.0, 0.0];
+        let w = [0.0, 1.0, 0.0];
+        assert_almost_eq!(euclidean_distance_l1(&v, &w), 2_f64.sqrt(), 1e-7);
+        let x = [0.5, 0.1, 0.1];
+        let y = [1.0, 1.0, 0.5];
+        assert_almost_eq!(euclidean_distance_l1(&x, &y), 0.4100771455544949, 1e-7);
+    }
+
+    #[test]
+    fn test_cosine_similarity() {
+        let v = [1.0, 0.0, 0.0];
+        let w = [0.0, 1.0, 0.0];
+        assert_almost_eq!(cosine_similarity(&v, &w), 0.0, 1e-7);
+        let x = [0.5, 0.5];
+        let y = [0.5, 0.5];
+        assert_almost_eq!(cosine_similarity(&x, &y), 1.0, 1e-7);
+    }
+}

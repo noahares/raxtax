@@ -26,7 +26,7 @@ fn map_dna_char(ch: char) -> u8 {
         'B' => c | g | t,
         'D' => a | g | t,
         'H' => a | c | t,
-        'V' => a | c | t,
+        'V' => a | c | g,
         'N' => a | c | g | t,
         _ => panic!("Unexpected character: {}", ch),
     }
@@ -146,119 +146,124 @@ pub fn parse_query_fasta_str(fasta_str: &str) -> Result<(Vec<String>, Vec<Vec<u8
     Ok((labels, sequences))
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use itertools::Itertools;
-//
-//
-//     use super::{parse_query_fasta_str, parse_reference_fasta_str};
-//
-//     #[test]
-//     fn test_str_parser() {
-//         let fasta_str = r">Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species1;
-// AAACCCTTTGGGA
-// >Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species2;
-// ATACGCTTTGGGA
-// >Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order4,f:Family5,g:Genus2,s:Species3;
-// ATCCGCTATGGGA
-// >Badabing|Badabum;tax=p:Phylum1,c:Class2,o:Order2,f:Family3,g:Genus3,s:Species6;
-// ATACGCTTTGCGT
-// >Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species2;
-// GTGCGCTATGCGA
-// >Badabing|Badabum;tax=p:Phylum2,c:Class3,o:Order3,f:Family4,g:Genus4,s:Species5;
-// ATACGCTTTGCGT";
-//         let LookupTables { k_mer_map, .. } = parse_reference_fasta_str(fasta_str).unwrap();
-//         for (k, v) in k_mer_map.iter().enumerate() {
-//             if !v.is_empty() {
-//                 println!("{k:b}:\n {v:?}");
-//             }
-//         }
-//         assert_eq!(
-//             k_mer_map[0b1010111111110_usize].iter().collect_vec(),
-//             &[&0_usize]
-//         );
-//         assert_eq!(
-//             k_mer_map[0b11000110011111_usize]
-//                 .iter()
-//                 .sorted()
-//                 .collect_vec(),
-//             &[&1, &4, &5]
-//         );
-//         assert_eq!(
-//             k_mer_map[0b110011100111010_usize].iter().collect_vec(),
-//             &[&3]
-//         );
-//     }
-//
-//     #[test]
-//     fn test_query_parser() {
-//         let fasta_str = r">label1
-// AAACCCTTTGGGA
-// >label2
-// ATACGCTTTGGGA
-// >label3
-// ATCCGCTATGGGA";
-//         let (_, sequences) = parse_query_fasta_str(fasta_str).unwrap();
-//         assert_eq!(sequences[0], &[0, 0, 0, 1, 1, 1, 3, 3, 3, 2, 2, 2, 0]);
-//     }
-//
-//     #[test]
-//     fn test_kmers() {
-//         let fasta_str = r">Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species1;
-// AAACCCCGT
-// >Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species1;
-// TAACCCCGG
-// >Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus2,s:Species3;
-// TTTAAAACC
-// >Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus2,s:Species3;
-// TTTAAAACA
-// >Badabing|Badabum;tax=p:Phylum1,c:Class2,o:Order2,f:Family2,g:Genus3,s:Species4;
-// AAACCCCGG";
-//         let LookupTables { k_mer_map, .. } = parse_reference_fasta_str(fasta_str).unwrap();
-//         // for (k, v) in k_mer_map.iter().enumerate() {
-//         //     if !v.is_empty() {
-//         //         println!("{k:b}:\n {v:?}");
-//         //     }
-//         // }
-//         assert_eq!(
-//             k_mer_map[0b101010110_usize].iter().sorted().collect_vec(),
-//             &[&0, &4]
-//         );
-//         assert_eq!(
-//             k_mer_map[0b10101011010_usize].iter().sorted().collect_vec(),
-//             &[&1, &4]
-//         );
-//         assert_eq!(
-//             k_mer_map[0b10101011011_usize].iter().sorted().collect_vec(),
-//             &[&0]
-//         );
-//         assert_eq!(
-//             k_mer_map[0b1100000101010110_usize]
-//                 .iter()
-//                 .sorted()
-//                 .collect_vec(),
-//             &[&1]
-//         );
-//         assert_eq!(
-//             k_mer_map[0b1111000000000101_usize]
-//                 .iter()
-//                 .sorted()
-//                 .collect_vec(),
-//             &[&2]
-//         );
-//         assert_eq!(
-//             k_mer_map[0b1111000000000101_usize]
-//                 .iter()
-//                 .sorted()
-//                 .collect_vec(),
-//             &[&2]
-//         );
-//         assert_eq!(
-//             k_mer_map[0b1111110000000001_usize]
-//                 .iter()
-//                 .sorted()
-//                 .collect_vec(),
-//             &[&2, &3]
-//         );
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use itertools::Itertools;
+
+    use crate::lineage::Tree;
+
+    use super::{parse_query_fasta_str, parse_reference_fasta_str};
+
+    #[test]
+    fn test_str_parser() {
+        let fasta_str = r">Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species1;
+AAACCCTTTGGGA
+>Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species2;
+ATACGCTTTGGGA
+>Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order4,f:Family5,g:Genus2,s:Species3;
+ATCCGCTATGGGA
+>Badabing|Badabum;tax=p:Phylum1,c:Class2,o:Order2,f:Family3,g:Genus3,s:Species6;
+ATACGCTTTGCGT
+>Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species2;
+GTGCGCTATGCGA
+>Badabing|Badabum;tax=p:Phylum2,c:Class3,o:Order3,f:Family4,g:Genus4,s:Species5;
+ATACGCTTTGCGT";
+        let Tree { k_mer_map, .. } = parse_reference_fasta_str(fasta_str).unwrap();
+        for (k, v) in k_mer_map.iter().enumerate() {
+            if !v.is_empty() {
+                println!("{k:b}:\n {v:?}");
+            }
+        }
+        assert_eq!(
+            k_mer_map[0b1010111111110_usize].iter().collect_vec(),
+            &[&0_usize]
+        );
+        assert_eq!(
+            k_mer_map[0b11000110011111_usize]
+                .iter()
+                .sorted()
+                .collect_vec(),
+            &[&1, &4, &5]
+        );
+        assert_eq!(
+            k_mer_map[0b110011100111010_usize].iter().collect_vec(),
+            &[&3]
+        );
+    }
+
+    #[test]
+    fn test_query_parser() {
+        let fasta_str = r">label1
+AAACCCTTTGGGA";
+        let (_, sequences) = parse_query_fasta_str(fasta_str).unwrap();
+        assert_eq!(sequences[0], &[1, 1, 1, 2, 2, 2, 8, 8, 8, 4, 4, 4, 1]);
+
+        let fasta_str2 = r">label1
+ACGTWSMKRYBDHVN";
+        let (_, sequences) = parse_query_fasta_str(fasta_str2).unwrap();
+        assert_eq!(
+            sequences[0],
+            &[1, 2, 4, 8, 9, 6, 3, 12, 5, 10, 14, 13, 11, 7, 15]
+        );
+    }
+
+    #[test]
+    fn test_kmers() {
+        let fasta_str = r">Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species1;
+AAACCCCGT
+>Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species1;
+TAACCCCGG
+>Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus2,s:Species3;
+TTTAAAACC
+>Badabing|Badabum;tax=p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus2,s:Species3;
+TTTAAAACA
+>Badabing|Badabum;tax=p:Phylum1,c:Class2,o:Order2,f:Family2,g:Genus3,s:Species4;
+AAACCCCGG";
+        let Tree { k_mer_map, .. } = parse_reference_fasta_str(fasta_str).unwrap();
+        for (k, v) in k_mer_map.iter().enumerate() {
+            if !v.is_empty() {
+                println!("{k:b}:\n {v:?}");
+            }
+        }
+        assert_eq!(
+            k_mer_map[0b101010110_usize].iter().sorted().collect_vec(),
+            &[&0, &4]
+        );
+        assert_eq!(
+            k_mer_map[0b10101011010_usize].iter().sorted().collect_vec(),
+            &[&1, &4]
+        );
+        assert_eq!(
+            k_mer_map[0b10101011011_usize].iter().sorted().collect_vec(),
+            &[&0]
+        );
+        assert_eq!(
+            k_mer_map[0b1100000101010110_usize]
+                .iter()
+                .sorted()
+                .collect_vec(),
+            &[&1]
+        );
+        assert_eq!(
+            k_mer_map[0b1111000000000101_usize]
+                .iter()
+                .sorted()
+                .collect_vec(),
+            &[&2]
+        );
+        assert_eq!(
+            k_mer_map[0b1111000000000101_usize]
+                .iter()
+                .sorted()
+                .collect_vec(),
+            &[&2]
+        );
+        assert_eq!(
+            k_mer_map[0b1111110000000001_usize]
+                .iter()
+                .sorted()
+                .collect_vec(),
+            &[&2, &3]
+        );
+    }
+}
