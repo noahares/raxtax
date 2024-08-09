@@ -38,9 +38,11 @@ pub fn raxtax<'a, 'b>(
                 }
             }
             let _tmr = timer!(Level::Debug; "Query Time");
-            let mut intersect_buffer: Vec<usize> = vec![0; tree.num_tips];
+            let mut intersect_buffer: Vec<u16> = vec![0; tree.num_tips];
             let k_mers = utils::sequence_to_kmers(query_sequence);
+            assert!(k_mers.len() <= u16::max_value() as usize);
             let num_trials = query_sequence.len() / 2;
+            assert!(num_trials <= u16::max_value() as usize);
             k_mers
                 .iter()
                 .for_each(|query_kmer| {
@@ -53,7 +55,7 @@ pub fn raxtax<'a, 'b>(
             if skip_exact_matches {
                 exact_matches.iter().for_each(|&id| unsafe { *intersect_buffer.get_unchecked_mut(id) = 0 });
             }
-            let highest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len(), num_trials, &intersect_buffer);
+            let highest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len() as u16, num_trials as u16, &intersect_buffer);
             let eval_res = lineage::Lineage::new(query_label, tree, &highest_hit_probs).evaluate();
             if let [idx] = exact_matches[..] {
                 assert!(!eval_res.is_empty());
