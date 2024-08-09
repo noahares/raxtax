@@ -150,7 +150,7 @@ impl<'a, 'b> Lineage<'a, 'b> {
                 (c.confidence_range.1 - c.confidence_range.0) as f64 / self.tree.num_tips as f64,
             );
             let child_pushed_result = self.eval_recurse(c, &conf_prefix, &expected_conf_prefix);
-            if self.tree.is_taxon_leaf(c) {
+            if !child_pushed_result && self.tree.is_taxon_leaf(c) {
                 self.confidence_vectors.push((
                     c.confidence_range.0,
                     conf_prefix,
