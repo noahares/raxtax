@@ -112,6 +112,10 @@ pub fn output_results_tsv(
 }
 
 pub fn euclidean_distance_l1(a: &[f64], b: &[f64]) -> f64 {
+    assert!(a.len() == b.len());
+    if a.is_empty() {
+        return 0.0;
+    };
     let a_sum = a.iter().sum::<f64>();
     let b_sum = b.iter().sum::<f64>();
     assert!(a_sum > 0.0);

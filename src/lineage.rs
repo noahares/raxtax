@@ -101,12 +101,14 @@ impl<'a, 'b> Lineage<'a, 'b> {
             .into_iter()
             .sorted_by(|a, b| b.1.iter().partial_cmp(a.1.iter()).unwrap())
             .map(|(idx, conf_values, expected_conf_values)| {
-                let start_index = expected_conf_values
+                let start_index = match expected_conf_values
                     .iter()
                     .find_position(|&&x| 1.0 - x > std::f64::EPSILON)
-                    .unwrap()
-                    .0;
-                let secondary_conf = utils::euclidean_distance_l1(
+                {
+                    Some((i, _)) => i,
+                    None => expected_conf_values.len() - 1,
+                };
+                let lineage_confidence = utils::euclidean_distance_l1(
                     &conf_values[start_index..],
                     &expected_conf_values[start_index..],
                 );
@@ -114,7 +116,7 @@ impl<'a, 'b> Lineage<'a, 'b> {
                     query_label: self.query_label,
                     lineage: &self.tree.lineages[idx],
                     confidence_values: conf_values,
-                    local_signal: secondary_conf,
+                    local_signal: lineage_confidence,
                     global_signal: leaf_confidence,
                 }
             })
@@ -131,8 +133,9 @@ impl<'a, 'b> Lineage<'a, 'b> {
         node: &TreeNode,
         confidence_prefix: &[f64],
         expected_confidence_prefix: &[f64],
-    ) {
+    ) -> bool {
         let mut no_child_significant = true;
+        let mut pushed_result = false;
         for c in &node.children {
             let mut conf_prefix = confidence_prefix.to_vec();
             let mut expected_conf_prefix = expected_confidence_prefix.to_vec();
@@ -146,14 +149,16 @@ impl<'a, 'b> Lineage<'a, 'b> {
             expected_conf_prefix.push(
                 (c.confidence_range.1 - c.confidence_range.0) as f64 / self.tree.num_tips as f64,
             );
-            self.eval_recurse(c, &conf_prefix, &expected_conf_prefix);
+            let child_pushed_result = self.eval_recurse(c, &conf_prefix, &expected_conf_prefix);
             if self.tree.is_taxon_leaf(c) {
                 self.confidence_vectors.push((
                     c.confidence_range.0,
                     conf_prefix,
                     expected_conf_prefix,
                 ));
+                pushed_result = true;
             }
+            pushed_result |= child_pushed_result;
         }
         if no_child_significant && self.tree.is_inner_taxon_node(node) {
             let mut conf_prefix = confidence_prefix.to_vec();
@@ -180,7 +185,9 @@ impl<'a, 'b> Lineage<'a, 'b> {
                 conf_prefix,
                 expected_conf_prefix,
             ));
+            pushed_result = true;
         }
+        pushed_result
     }
 }
 
