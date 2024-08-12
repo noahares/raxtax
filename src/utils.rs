@@ -151,6 +151,14 @@ pub fn cosine_similarity(vec_a: &[f64], vec_b: &[f64]) -> f64 {
         / (norm_a * norm_b)
 }
 
+pub fn report_error(e: anyhow::Error, message: impl std::fmt::Display) {
+    let prefix = "\x1b[31m[ERROR]\x1b[0m";
+    log::error!("{}: {}", message, e);
+    if log::log_enabled!(log::Level::Error) {
+        eprintln!("{} {}: {}", prefix, message, e);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use statrs::assert_almost_eq;

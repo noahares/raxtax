@@ -28,6 +28,7 @@ pub fn raxtax<'a, 'b>(
         .map(|(i, (query_label, query_sequence))| {
             let exact_matches = tree.sequences.get(query_sequence).map_or(Vec::new(), |m| m.to_owned());
             if !skip_exact_matches {
+                // check for inconsistencies for exact matches
                 let mut mtx = warnings.lock().unwrap();
                 for id in &exact_matches {
                     info!("Exact sequence match for query {query_label}: {}", tree.lineages[*id]);
@@ -41,7 +42,10 @@ pub fn raxtax<'a, 'b>(
             let mut intersect_buffer: Vec<u16> = vec![0; tree.num_tips];
             let k_mers = utils::sequence_to_kmers(query_sequence);
             assert!(k_mers.len() <= u16::max_value() as usize);
-            let num_trials = query_sequence.len() / 2;
+            // NOTE: Ideally num_trials should be halve the sequence length.
+            // To fulfill the assertion and not run into issues for long sequences, this is capped
+            // at u16::MAX
+            let num_trials = (query_sequence.len() / 2).min(u16::max_value() as usize);
             assert!(num_trials <= u16::max_value() as usize);
             k_mers
                 .iter()
@@ -53,10 +57,12 @@ pub fn raxtax<'a, 'b>(
                         });
                 });
             if skip_exact_matches {
+                // look for the next best match
                 exact_matches.iter().for_each(|&id| unsafe { *intersect_buffer.get_unchecked_mut(id) = 0 });
             }
             let highest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len() as u16, num_trials as u16, &intersect_buffer);
             let eval_res = lineage::Lineage::new(query_label, tree, &highest_hit_probs).evaluate();
+            // Special case: if there is exactly 1 exact match, confidence is set to 1.0
             if let [idx] = exact_matches[..] {
                 assert!(!eval_res.is_empty());
                 let mut best_hit = eval_res[0].clone();
