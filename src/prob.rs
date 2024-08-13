@@ -10,11 +10,14 @@ pub fn highest_hit_prob_per_reference(
     num_trials: usize,
     intersection_sizes: &[u16],
 ) -> Vec<f64> {
-    let intersection_size_counts = intersection_sizes.iter().counts();
-    let highest_hit_probs = if intersection_size_counts.contains_key(&total_num_k_mers) {
+    let intersection_size_counts = intersection_sizes.iter().counts().into_iter().collect_vec();
+    let highest_hit_probs = if intersection_size_counts
+        .iter()
+        .any(|(&i, _)| i == total_num_k_mers)
+    {
         intersection_size_counts
-            .keys()
-            .map(|&&n_intersections| {
+            .iter()
+            .map(|(&n_intersections, _)| {
                 (
                     n_intersections,
                     pmf(
@@ -27,9 +30,9 @@ pub fn highest_hit_prob_per_reference(
             })
             .collect::<HashMap<u16, f64>>()
     } else {
-        let pmfs: HashMap<u16, Vec<f64>> = intersection_size_counts
-            .keys()
-            .map(|&&n_intersections| {
+        let pmfs: Vec<(u16, Vec<f64>)> = intersection_size_counts
+            .iter()
+            .map(|(&n_intersections, _)| {
                 (
                     n_intersections,
                     (0..=num_trials)
@@ -44,45 +47,41 @@ pub fn highest_hit_prob_per_reference(
                         .collect_vec(),
                 )
             })
-            .collect();
-        let cmfs: HashMap<u16, Vec<f64>> = pmfs
+            .collect_vec();
+        let cmfs: Vec<Vec<f64>> = pmfs
             .iter()
-            .map(|(&i, v)| {
-                (
-                    i,
-                    v.iter()
-                        .scan(0.0, |sum, pmf| {
-                            *sum += pmf;
-                            Some(*sum)
-                        })
-                        .collect_vec(),
-                )
+            .map(|(_, v)| {
+                v.iter()
+                    .scan(0.0, |sum, pmf| {
+                        *sum += pmf;
+                        Some(*sum)
+                    })
+                    .collect_vec()
             })
-            .collect();
+            .collect_vec();
         let cmf_prod_components = (0..=num_trials)
             .map(|i| {
                 intersection_size_counts
                     .iter()
-                    .map(|(&&size, &count)| {
-                        let x = unsafe { *cmfs[&size].get_unchecked(i) };
+                    .zip_eq(cmfs.iter())
+                    .map(|(&(_, count), cmf)| {
+                        let x = unsafe { *cmf.get_unchecked(i) };
                         (count as f64) * x.ln()
                     })
                     .sum::<f64>()
             })
             .collect_vec();
-        pmfs.iter()
-            .map(|(i, v)| {
+        pmfs.into_iter()
+            .zip_eq(cmfs.into_iter())
+            .map(|((i, pmf), cmf)| {
                 (
-                    *i,
-                    v.iter()
-                        .enumerate()
-                        .zip_eq(cmf_prod_components.iter())
-                        .map(|((j, pmf), prod_components)| {
-                            let x = unsafe { *cmfs[i].get_unchecked(j) };
-                            if x == 0.0 || *prod_components == f64::NEG_INFINITY {
+                    i,
+                    itertools::izip!(pmf.into_iter(), cmf.into_iter(), cmf_prod_components.iter())
+                        .map(|(p, c, &prod_components)| {
+                            if c == 0.0 || prod_components == f64::NEG_INFINITY {
                                 0.0
                             } else {
-                                (pmf.ln() + prod_components - x.ln()).exp()
+                                (p.ln() + prod_components - c.ln()).exp()
                             }
                         })
                         .sum::<f64>(),
