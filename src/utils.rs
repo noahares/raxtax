@@ -62,15 +62,12 @@ pub fn output_results(
     results: &[Vec<lineage::EvaluationResult<'_, '_>>],
     mut output: Box<dyn Write>,
 ) -> Result<()> {
-    let output_lines: Vec<String> = results
-        .iter()
-        .map(|eval_results| {
-            eval_results
-                .iter()
-                .map(|er| er.get_output_string())
-                .join("\n")
-        })
-        .collect_vec();
+    let output_lines = results.iter().flat_map(|eval_results| {
+        eval_results
+            .iter()
+            .map(|er| er.get_output_string())
+            .collect_vec()
+    });
     writeln!(output, "{}", output_lines.into_iter().join("\n"))?;
     Ok(())
 }
@@ -97,16 +94,15 @@ pub fn output_results_tsv(
     sequences: Vec<String>,
     mut output: Box<dyn Write>,
 ) -> Result<()> {
-    let output_lines: Vec<String> = results
+    let output_lines = results
         .iter()
         .zip_eq(sequences)
-        .map(|(eval_results, sequence)| {
+        .flat_map(|(eval_results, sequence)| {
             eval_results
                 .iter()
                 .map(|er| er.get_tsv_string(&sequence))
-                .join("\n")
-        })
-        .collect_vec();
+                .collect_vec()
+        });
     writeln!(output, "{}", output_lines.into_iter().join("\n"))?;
     Ok(())
 }
