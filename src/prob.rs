@@ -7,7 +7,7 @@ use statrs::function::factorial::ln_binomial;
 #[time("debug")]
 pub fn highest_hit_prob_per_reference(
     total_num_k_mers: u16,
-    num_trials: u16,
+    num_trials: usize,
     intersection_sizes: &[u16],
 ) -> Vec<f64> {
     let intersection_size_counts = intersection_sizes.iter().counts();
@@ -59,7 +59,7 @@ pub fn highest_hit_prob_per_reference(
                 )
             })
             .collect();
-        let cmf_prod_components = (0..=num_trials as usize)
+        let cmf_prod_components = (0..=num_trials)
             .map(|i| {
                 intersection_size_counts
                     .iter()

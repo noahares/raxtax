@@ -44,11 +44,7 @@ pub fn raxtax<'a, 'b>(
                 let _tmr = timer!(Level::Debug; "Query Time");
                 let k_mers = utils::sequence_to_kmers(query_sequence);
                 assert!(k_mers.len() <= u16::max_value() as usize);
-                // NOTE: Ideally num_trials should be halve the sequence length.
-                // To fulfill the assertion and not run into issues for long sequences, this is capped
-                // at u16::MAX
-                let num_trials = (query_sequence.len() / 2).min(u16::max_value() as usize);
-                assert!(num_trials <= u16::max_value() as usize);
+                let num_trials = query_sequence.len() / 2;
                 k_mers
                     .iter()
                     .for_each(|query_kmer| {
@@ -62,7 +58,7 @@ pub fn raxtax<'a, 'b>(
                     // look for the next best match
                     exact_matches.iter().for_each(|&id| unsafe { *intersect_buffer.get_unchecked_mut(id) = 0 });
                 }
-                let highest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len() as u16, num_trials as u16, &intersect_buffer);
+                let highest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len() as u16, num_trials, &intersect_buffer);
                 let eval_res = lineage::Lineage::new(query_label, tree, &highest_hit_probs).evaluate();
                 // Special case: if there is exactly 1 exact match, confidence is set to 1.0
                 if let [idx] = exact_matches[..] {
