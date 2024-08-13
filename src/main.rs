@@ -67,7 +67,13 @@ fn main() {
     });
 
     // Compute query results and output to files
-    let result = raxtax(&query_data, &tree, args.skip_exact_matches);
+    let n_threads = rayon::current_num_threads();
+    let chunk_size = if n_threads == 1 {
+        query_data.0.len()
+    } else {
+        ((query_data.0.len() / (n_threads * 10)) + 1).max(100)
+    };
+    let result = raxtax(&query_data, &tree, args.skip_exact_matches, chunk_size);
     if let Some(tsv_output) = tsv_output {
         let sequences: Vec<String> = utils::decompress_sequences(&query_data.1);
         if let Err(e) = utils::output_results_tsv(&result, sequences, tsv_output) {
