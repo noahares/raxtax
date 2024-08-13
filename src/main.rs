@@ -34,6 +34,13 @@ fn main() {
         utils::report_error(anyhow::Error::from(e), "Failed to set up Multithreading");
         exit(exitcode::OSERR);
     };
+    if let Err(e) = std::fs::metadata(&args.query_file) {
+        utils::report_error(
+            anyhow::Error::from(e),
+            format!("Failed to parse {}", args.query_file.display()),
+        );
+        exit(exitcode::NOINPUT);
+    }
     let _total_tmr = timer!(Level::Info; "Total Runtime");
 
     // Parse reference databse
