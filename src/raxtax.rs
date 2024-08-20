@@ -44,7 +44,7 @@ pub fn raxtax<'a, 'b>(
                 let tmr = timer!(Level::Debug; "K-mer Intersections");
                 let k_mers = utils::sequence_to_kmers(query_sequence);
                 assert!(k_mers.len() <= u16::max_value() as usize);
-                let num_trials = query_sequence.len() / 2;
+                let num_trials = k_mers.len() / 2;
                 k_mers
                     .iter()
                     .for_each(|query_kmer| {
