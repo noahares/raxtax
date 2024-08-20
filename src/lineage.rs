@@ -69,7 +69,7 @@ pub struct Lineage<'a, 'b> {
 }
 
 impl<'a, 'b> Lineage<'a, 'b> {
-    pub fn new(query_label: &'b String, tree: &'a Tree, confidence_values: &[f64]) -> Self {
+    pub fn new(query_label: &'b String, tree: &'a Tree, confidence_values: Vec<f64>) -> Self {
         let mut confidence_prefix_sum = vec![0.0];
         confidence_prefix_sum.extend(confidence_values.iter().scan(0.0, |sum, i| {
             *sum += i;
@@ -78,7 +78,7 @@ impl<'a, 'b> Lineage<'a, 'b> {
         Self {
             query_label,
             tree,
-            confidence_values: confidence_values.to_vec(),
+            confidence_values,
             confidence_prefix_sum,
             confidence_vectors: Vec::new(),
             rounding_factor: 10_u32.pow(utils::F64_OUTPUT_ACCURACY) as f64,
@@ -403,7 +403,7 @@ mod tests {
             [0b00].repeat(9),
         ];
         let tree = Tree::new(lineages, sequences).unwrap();
-        let confidence_values = &[0.1, 0.3, 0.4, 0.004, 0.004];
+        let confidence_values = vec![0.1, 0.3, 0.4, 0.004, 0.004];
         tree.print();
         let query_label = String::from("q");
         let lineage = Lineage::new(&query_label, &tree, confidence_values);
@@ -457,7 +457,7 @@ mod tests {
             [0b00].repeat(9),
         ];
         let tree = Tree::new(lineages, sequences).unwrap();
-        let confidence_values = &[0.05, 0.1, 0.3, 0.4, 0.1, 0.004, 0.004];
+        let confidence_values = vec![0.05, 0.1, 0.3, 0.4, 0.1, 0.004, 0.004];
         tree.print();
         let query_label = String::from("q");
         let lineage = Lineage::new(&query_label, &tree, confidence_values);
@@ -508,7 +508,7 @@ mod tests {
         ];
         let sequences = vec![[0b00].repeat(9), [0b00].repeat(9), [0b00].repeat(9)];
         let tree = Tree::new(lineages, sequences).unwrap();
-        let confidence_values = &[0.004, 0.004, 0.004];
+        let confidence_values = vec![0.004, 0.004, 0.004];
         tree.print();
         let query_label = String::from("q");
         let lineage = Lineage::new(&query_label, &tree, confidence_values);

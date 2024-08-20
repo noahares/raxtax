@@ -60,7 +60,7 @@ pub fn raxtax<'a, 'b>(
                 }
                 drop(tmr);
                 let highest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len() as u16, num_trials, &intersect_buffer);
-                let eval_res = lineage::Lineage::new(query_label, tree, &highest_hit_probs).evaluate();
+                let eval_res = lineage::Lineage::new(query_label, tree, highest_hit_probs).evaluate();
                 // Special case: if there is exactly 1 exact match, confidence is set to 1.0
                 if let [idx] = exact_matches[..] {
                     assert!(!eval_res.is_empty());
