@@ -10,14 +10,18 @@ pub fn highest_hit_prob_per_reference(
     num_trials: usize,
     intersection_sizes: &[u16],
 ) -> Vec<f64> {
-    let intersection_size_counts = intersection_sizes.iter().counts().into_iter().collect_vec();
+    let intersection_size_counts = intersection_sizes.iter().counts();
+    let num_possible_kmer_sets = ln_binomial(
+        total_num_k_mers as u64 + num_trials as u64 - 1,
+        num_trials as u64,
+    );
     let highest_hit_probs = if intersection_size_counts
         .iter()
-        .any(|(&i, _)| i == total_num_k_mers)
+        .any(|(&&i, _)| i == total_num_k_mers)
     {
         intersection_size_counts
             .iter()
-            .map(|(&n_intersections, _)| {
+            .map(|(&&n_intersections, _)| {
                 (
                     n_intersections,
                     pmf(
@@ -25,6 +29,7 @@ pub fn highest_hit_prob_per_reference(
                         num_trials as u64,
                         num_trials as u64,
                         n_intersections as u64,
+                        num_possible_kmer_sets,
                     ),
                 )
             })
@@ -32,19 +37,15 @@ pub fn highest_hit_prob_per_reference(
     } else {
         let pmfs: Vec<(u16, Vec<f64>)> = intersection_size_counts
             .iter()
-            .map(|(&n_intersections, _)| {
+            .map(|(&&n_intersections, _)| {
                 (
                     n_intersections,
-                    (0..=num_trials)
-                        .map(|i| {
-                            pmf(
-                                total_num_k_mers as u64,
-                                i as u64,
-                                num_trials as u64,
-                                n_intersections as u64,
-                            )
-                        })
-                        .collect_vec(),
+                    iterative_pmfs(
+                        total_num_k_mers as u64,
+                        num_trials as u64,
+                        n_intersections as u64,
+                        num_possible_kmer_sets,
+                    ),
                 )
             })
             .collect_vec();
@@ -64,7 +65,7 @@ pub fn highest_hit_prob_per_reference(
                 intersection_size_counts
                     .iter()
                     .zip_eq(cmfs.iter())
-                    .map(|(&(_, count), cmf)| {
+                    .map(|((_, &count), cmf)| {
                         let x = unsafe { *cmf.get_unchecked(i) };
                         (count as f64) * x.ln()
                     })
@@ -102,7 +103,13 @@ pub fn highest_hit_prob_per_reference(
         .collect_vec()
 }
 
-pub fn pmf(total_num_k_mers: u64, i: u64, num_trials: u64, num_intersections: u64) -> f64 {
+pub fn pmf(
+    total_num_k_mers: u64,
+    i: u64,
+    num_trials: u64,
+    num_intersections: u64,
+    num_possible_kmer_sets: f64,
+) -> f64 {
     if num_intersections == total_num_k_mers {
         if i == num_trials {
             return 1.0;
@@ -122,22 +129,66 @@ pub fn pmf(total_num_k_mers: u64, i: u64, num_trials: u64, num_intersections: u6
         (total_num_k_mers - num_intersections) + (num_trials - i) - 1,
         num_trials - i,
     );
-    let num_possible_kmer_sets = ln_binomial(total_num_k_mers + num_trials - 1, num_trials);
     (num_possible_matches + num_impossible_matches - num_possible_kmer_sets).exp()
+}
+
+pub fn iterative_pmfs(
+    total_num_k_mers: u64,
+    num_trials: u64,
+    num_intersections: u64,
+    num_possible_kmer_sets: f64,
+) -> Vec<f64> {
+    if num_intersections == total_num_k_mers {
+        let mut res = vec![0.0; num_trials as usize + 1];
+        res[num_trials as usize] = 1.0;
+        return res;
+    }
+    if num_intersections == 0 {
+        let mut res = vec![0.0; num_trials as usize + 1];
+        res[0] = 1.0;
+        return res;
+    }
+    let mut num_possible_matches = vec![0.0];
+    num_possible_matches.extend((1..=num_trials).scan(0.0, |sum, i| {
+        *sum += ((num_intersections + i - 1) as f64).ln() - (i as f64).ln();
+        Some(*sum)
+    }));
+    let impossible_init = ln_binomial(
+        total_num_k_mers - num_intersections + num_trials - 1,
+        num_trials,
+    );
+    let mut num_impossible_matches = vec![impossible_init];
+    num_impossible_matches.extend((1..num_trials).scan(impossible_init, |sum, i| {
+        *sum -= ((total_num_k_mers - num_intersections + num_trials - i) as f64).ln()
+            - ((num_trials - i + 1) as f64).ln();
+        Some(*sum)
+    }));
+    num_impossible_matches.push(0.0);
+    num_possible_matches
+        .into_iter()
+        .zip_eq(num_impossible_matches)
+        .map(|(p, i)| (p + i - num_possible_kmer_sets).exp())
+        .collect_vec()
 }
 
 #[cfg(test)]
 mod tests {
     use itertools::Itertools;
-    use statrs::assert_almost_eq;
+    use statrs::{assert_almost_eq, function::factorial::ln_binomial};
+
+    use crate::prob::iterative_pmfs;
 
     use super::{highest_hit_prob_per_reference, pmf};
 
     #[test]
     fn test_pmf() {
-        let p = pmf(200, 31, 32, 199);
-        dbg!(p);
-        assert_almost_eq!(p, 0.119857, 1e-7);
+        let num_possible_kmer_sets = ln_binomial(200 + 32 - 1, 32);
+        let p = iterative_pmfs(200, 32, 50, num_possible_kmer_sets);
+        let p2 = (0..=32)
+            .map(|i| pmf(200, i, 32, 50, num_possible_kmer_sets))
+            .collect_vec();
+        assert_almost_eq!(p.iter().sum::<f64>(), 1.0, 1e-7);
+        assert_almost_eq!(p2.iter().sum::<f64>(), 1.0, 1e-7);
     }
 
     #[test]
