@@ -35,7 +35,7 @@ pub fn sequence_to_kmers(sequence: &[u8]) -> Vec<u16> {
             k_mers.insert(k_mer);
         }
     });
-    k_mers.into_iter().unique().sorted().collect_vec()
+    k_mers.into_iter().sorted().collect_vec()
 }
 
 pub fn get_reader(path: &PathBuf) -> Result<Box<dyn Read>> {

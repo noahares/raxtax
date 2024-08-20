@@ -41,7 +41,7 @@ pub fn raxtax<'a, 'b>(
                         *mtx = true;
                     }
                 }
-                let _tmr = timer!(Level::Debug; "Query Time");
+                let tmr = timer!(Level::Debug; "K-mer Intersections");
                 let k_mers = utils::sequence_to_kmers(query_sequence);
                 assert!(k_mers.len() <= u16::max_value() as usize);
                 let num_trials = query_sequence.len() / 2;
@@ -58,6 +58,7 @@ pub fn raxtax<'a, 'b>(
                     // look for the next best match
                     exact_matches.iter().for_each(|&id| unsafe { *intersect_buffer.get_unchecked_mut(id) = 0 });
                 }
+                drop(tmr);
                 let highest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len() as u16, num_trials, &intersect_buffer);
                 let eval_res = lineage::Lineage::new(query_label, tree, &highest_hit_probs).evaluate();
                 // Special case: if there is exactly 1 exact match, confidence is set to 1.0
