@@ -1,4 +1,4 @@
-use ahash::HashMap;
+use ahash::{HashMap, HashMapExt};
 
 use itertools::Itertools;
 use logging_timer::time;
@@ -10,7 +10,13 @@ pub fn highest_hit_prob_per_reference(
     num_trials: usize,
     intersection_sizes: &[u16],
 ) -> Vec<f64> {
-    let intersection_size_counts = intersection_sizes.iter().counts();
+    let intersection_size_counts = {
+        let mut counts: HashMap<&u16, usize> = HashMap::new();
+        intersection_sizes
+            .iter()
+            .for_each(|item| *counts.entry(item).or_default() += 1);
+        counts
+    };
     let num_possible_kmer_sets = ln_binomial(
         total_num_k_mers as u64 + num_trials as u64 - 1,
         num_trials as u64,
