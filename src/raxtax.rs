@@ -35,7 +35,7 @@ pub fn raxtax<'a, 'b>(
             l.iter().zip(s.iter()).map(|(query_label, query_sequence)| {
                 pb.inc(1);
                 intersect_buffer.fill(0);
-                let exact_matches = tree.sequences.get(query_sequence).map_or(Vec::new(), |m| m.to_owned());
+                let exact_matches = tree.sequences.get(query_sequence).map_or(Vec::new(), |m| m.clone());
                 if !skip_exact_matches {
                     // check for inconsistencies for exact matches
                     let mut mtx = warnings.lock().unwrap();
@@ -49,20 +49,18 @@ pub fn raxtax<'a, 'b>(
                 }
                 let tmr = timer!(Level::Debug; "K-mer Intersections");
                 let k_mers = utils::sequence_to_kmers(query_sequence);
-                assert!(k_mers.len() <= u16::max_value() as usize);
+                assert!(u16::try_from(k_mers.len()).is_ok());
                 let num_trials = k_mers.len() / 2;
-                k_mers
-                    .iter()
-                    .for_each(|query_kmer| {
+                for query_kmer in &k_mers {
                         tree.k_mer_map[*query_kmer as usize]
                             .iter()
                             .for_each(|sequence_id| {
                                 unsafe { *intersect_buffer.get_unchecked_mut(*sequence_id) += 1 };
                             });
-                    });
+                    }
                 if skip_exact_matches {
                     // look for the next best match
-                    exact_matches.iter().for_each(|&id| unsafe { *intersect_buffer.get_unchecked_mut(id) = 0 });
+                    for &id in &exact_matches { unsafe { *intersect_buffer.get_unchecked_mut(id) = 0 } }
                 }
                 drop(tmr);
                 let highest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len() as u16, num_trials, &intersect_buffer);

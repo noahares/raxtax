@@ -65,7 +65,7 @@ pub fn output_results(
     let output_lines = results.iter().flat_map(|eval_results| {
         eval_results
             .iter()
-            .map(|er| er.get_output_string())
+            .map(lineage::EvaluationResult::get_output_string)
             .collect_vec()
     });
     writeln!(output, "{}", output_lines.into_iter().join("\n"))?;
@@ -151,7 +151,7 @@ pub fn report_error(e: anyhow::Error, message: impl std::fmt::Display) {
     let prefix = "\x1b[31m[ERROR]\x1b[0m";
     log::error!("{}: {}", message, e);
     if log::log_enabled!(log::Level::Error) {
-        eprintln!("{} {}: {}", prefix, message, e);
+        eprintln!("{prefix} {message}: {e}");
     }
 }
 
@@ -179,7 +179,7 @@ mod tests {
         assert_almost_eq!(euclidean_distance_l1(&v, &w), 2_f64.sqrt(), 1e-7);
         let x = [0.5, 0.1, 0.1];
         let y = [1.0, 1.0, 0.5];
-        assert_almost_eq!(euclidean_distance_l1(&x, &y), 0.4100771455544949, 1e-7);
+        assert_almost_eq!(euclidean_distance_l1(&x, &y), 0.410_077_145_554_494_9, 1e-7);
     }
 
     #[test]
@@ -209,14 +209,14 @@ mod tests {
         assert_equal(
             kmers,
             vec![
-                0b0001001011011110,
-                0b0010110111100010,
-                0b0100101101111000,
-                0b0111100010110111,
-                0b1000101101111000,
-                0b1011011110001011,
-                0b1101111000101101,
-                0b1110001011011110,
+                0b0001_0010_1101_1110,
+                0b0010_1101_1110_0010,
+                0b0100_1011_0111_1000,
+                0b0111_1000_1011_0111,
+                0b1000_1011_0111_1000,
+                0b1011_0111_1000_1011,
+                0b1101_1110_0010_1101,
+                0b1110_0010_1101_1110,
             ],
         );
     }

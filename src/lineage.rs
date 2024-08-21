@@ -1,4 +1,4 @@
-use crate::tree::{Tree, TreeNode};
+use crate::tree::{Node, Tree};
 use itertools::Itertools;
 use logging_timer::time;
 
@@ -34,7 +34,7 @@ impl EvaluationResult<'_, '_> {
             self.query_label,
             self.lineage
                 .split(',')
-                .map(|s| s.to_string())
+                .map(std::string::ToString::to_string)
                 .interleave(self.confidence_values.iter().map(|v| format!(
                     "{1:.0$}",
                     utils::F64_OUTPUT_ACCURACY as usize,
@@ -70,7 +70,7 @@ impl<'a, 'b> Lineage<'a, 'b> {
             confidence_values,
             confidence_prefix_sum,
             confidence_vectors: Vec::new(),
-            rounding_factor: 10_u32.pow(utils::F64_OUTPUT_ACCURACY) as f64,
+            rounding_factor: f64::from(10_u32.pow(utils::F64_OUTPUT_ACCURACY)),
         }
     }
 
@@ -112,14 +112,14 @@ impl<'a, 'b> Lineage<'a, 'b> {
             .collect_vec()
     }
 
-    fn get_confidence(&self, node: &TreeNode) -> f64 {
+    fn get_confidence(&self, node: &Node) -> f64 {
         self.confidence_prefix_sum[node.confidence_range.1]
             - self.confidence_prefix_sum[node.confidence_range.0]
     }
 
     fn eval_recurse(
         &mut self,
-        node: &TreeNode,
+        node: &Node,
         confidence_prefix: &[f64],
         expected_confidence_prefix: &[f64],
     ) -> bool {

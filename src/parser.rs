@@ -28,7 +28,7 @@ fn map_dna_char(ch: char) -> u8 {
         'H' => a | c | t,
         'V' => a | c | g,
         'N' => a | c | g | t,
-        _ => panic!("Unexpected character: {}", ch),
+        _ => panic!("Unexpected character: {ch}"),
     }
 }
 
@@ -77,11 +77,10 @@ fn parse_reference_fasta_str(fasta_str: &str) -> Result<Tree> {
                     let lineage = regex
                         .captures(label)
                         .context(format!(
-                            "Unexpected taxonomical annotation detected in label {}",
-                            label
+                            "Unexpected taxonomical annotation detected in label {label}"
                         ))?
                         .get(1)
-                        .context(format!("No taxonomic string found in label {}", label))?
+                        .context(format!("No taxonomic string found in label {label}"))?
                         .as_str()
                         .to_owned();
                     labels.push(lineage);
@@ -90,7 +89,7 @@ fn parse_reference_fasta_str(fasta_str: &str) -> Result<Tree> {
                         current_sequence = Vec::new();
                     }
                 } else {
-                    current_sequence.extend(line.chars().map(|c| -> u8 { map_dna_char(c) }))
+                    current_sequence.extend(line.chars().map(|c| -> u8 { map_dna_char(c) }));
                 }
                 Ok(())
             })
@@ -136,7 +135,7 @@ fn parse_query_fasta_str(fasta_str: &str) -> Result<(Vec<String>, Vec<Vec<u8>>)>
                 current_sequence = Vec::new();
             }
         } else {
-            current_sequence.extend(line.chars().map(|c| -> u8 { map_dna_char(c) }))
+            current_sequence.extend(line.chars().map(|c| -> u8 { map_dna_char(c) }));
         }
     }
     sequences.push(current_sequence);
@@ -175,18 +174,22 @@ ATACGCTTTGCGT";
             }
         }
         assert_eq!(
-            tree.k_mer_map[0b1010111111110_usize].iter().collect_vec(),
+            tree.k_mer_map[0b1_0101_1111_1110_usize]
+                .iter()
+                .collect_vec(),
             &[&0_usize]
         );
         assert_eq!(
-            tree.k_mer_map[0b11000110011111_usize]
+            tree.k_mer_map[0b11_0001_1001_1111_usize]
                 .iter()
                 .sorted()
                 .collect_vec(),
             &[&1, &4, &5]
         );
         assert_eq!(
-            tree.k_mer_map[0b110011100111010_usize].iter().collect_vec(),
+            tree.k_mer_map[0b110_0111_0011_1010_usize]
+                .iter()
+                .collect_vec(),
             &[&3]
         );
         assert_eq!(tree.num_tips, 6);
@@ -238,40 +241,46 @@ AAACCCCGG";
             }
         }
         assert_eq!(
-            k_mer_map[0b101010110_usize].iter().sorted().collect_vec(),
+            k_mer_map[0b1_0101_0110_usize].iter().sorted().collect_vec(),
             &[&0, &4]
         );
         assert_eq!(
-            k_mer_map[0b10101011010_usize].iter().sorted().collect_vec(),
+            k_mer_map[0b101_0101_1010_usize]
+                .iter()
+                .sorted()
+                .collect_vec(),
             &[&1, &4]
         );
         assert_eq!(
-            k_mer_map[0b10101011011_usize].iter().sorted().collect_vec(),
+            k_mer_map[0b101_0101_1011_usize]
+                .iter()
+                .sorted()
+                .collect_vec(),
             &[&0]
         );
         assert_eq!(
-            k_mer_map[0b1100000101010110_usize]
+            k_mer_map[0b1100_0001_0101_0110_usize]
                 .iter()
                 .sorted()
                 .collect_vec(),
             &[&1]
         );
         assert_eq!(
-            k_mer_map[0b1111000000000101_usize]
+            k_mer_map[0b1111_0000_0000_0101_usize]
                 .iter()
                 .sorted()
                 .collect_vec(),
             &[&2]
         );
         assert_eq!(
-            k_mer_map[0b1111000000000101_usize]
+            k_mer_map[0b1111_0000_0000_0101_usize]
                 .iter()
                 .sorted()
                 .collect_vec(),
             &[&2]
         );
         assert_eq!(
-            k_mer_map[0b1111110000000001_usize]
+            k_mer_map[0b1111_1100_0000_0001_usize]
                 .iter()
                 .sorted()
                 .collect_vec(),

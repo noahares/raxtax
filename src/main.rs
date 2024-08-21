@@ -17,7 +17,7 @@ fn main() {
         log: log_output,
     } = args.get_output().unwrap_or_else(|e| {
         if args.verbosity.log_level_filter() >= Level::Error {
-            eprintln!("\x1b[31m[ERROR]\x1b[0m {}", e);
+            eprintln!("\x1b[31m[ERROR]\x1b[0m {e}");
         }
         exit(exitcode::CANTCREAT);
     });

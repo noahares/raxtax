@@ -113,16 +113,14 @@ pub fn pmf(
     if num_intersections == total_num_k_mers {
         if i == num_trials {
             return 1.0;
-        } else {
-            return 0.0;
         }
+        return 0.0;
     }
     if num_intersections == 0 {
         if i == 0 {
             return 1.0;
-        } else {
-            return 0.0;
         }
+        return 0.0;
     }
     let num_possible_matches = ln_binomial(num_intersections + i - 1, i);
     let num_impossible_matches = ln_binomial(

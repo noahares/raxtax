@@ -17,7 +17,7 @@ use crate::utils::map_four_to_two_bit_repr;
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Tree {
-    pub root: TreeNode,
+    pub root: Node,
     pub lineages: Vec<String>,
     pub sequences: HashMap<Vec<u8>, Vec<usize>>,
     pub k_mer_map: Vec<Vec<usize>>,
@@ -27,7 +27,7 @@ pub struct Tree {
 impl Tree {
     #[time("info", "Tree::{}")]
     pub fn new(lineages: Vec<String>, sequences: Vec<Vec<u8>>) -> Result<Self> {
-        let mut root = TreeNode::new(String::from("root"), 0, NodeType::Inner);
+        let mut root = Node::new(String::from("root"), 0, NodeType::Inner);
         let mut sequence_map: HashMap<Vec<u8>, Vec<usize>> = HashMap::new();
         let mut k_mer_map: Vec<Vec<usize>> = vec![Vec::new(); 2 << 15];
         let mut lineage_sequence_pairs = lineages.into_iter().zip_eq(sequences).collect_vec();
@@ -57,7 +57,7 @@ impl Tree {
                     match &current_node.get_last_child_label() {
                         Some(name) => {
                             if name.as_str() != label {
-                                current_node.add_child(TreeNode::new(
+                                current_node.add_child(Node::new(
                                     label.to_owned(),
                                     confidence_idx,
                                     node_type,
@@ -66,7 +66,7 @@ impl Tree {
                             current_node.confidence_range.1 = confidence_idx + 1;
                         }
                         None => {
-                            current_node.add_child(TreeNode::new(
+                            current_node.add_child(Node::new(
                                 label.to_owned(),
                                 confidence_idx,
                                 node_type,
@@ -79,8 +79,8 @@ impl Tree {
                     }
                     current_node = current_node.children.last_mut().unwrap();
                 }
-                current_node.add_child(TreeNode::new(
-                    current_node.label.to_owned(),
+                current_node.add_child(Node::new(
+                    current_node.label.clone(),
                     confidence_idx - 1,
                     NodeType::Sequence,
                 ));
@@ -146,11 +146,11 @@ impl Tree {
         values
     }
 
-    pub fn is_inner_taxon_node(&self, node: &TreeNode) -> bool {
+    pub fn is_inner_taxon_node(&self, node: &Node) -> bool {
         node.node_type == NodeType::Inner
     }
 
-    pub fn is_taxon_leaf(&self, node: &TreeNode) -> bool {
+    pub fn is_taxon_leaf(&self, node: &Node) -> bool {
         node.node_type == NodeType::Taxon
     }
 }
@@ -163,14 +163,14 @@ enum NodeType {
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct TreeNode {
+pub struct Node {
     label: String,
     pub confidence_range: (usize, usize),
-    pub children: Vec<TreeNode>,
+    pub children: Vec<Node>,
     node_type: NodeType,
 }
 
-impl TreeNode {
+impl Node {
     fn new(label: String, confidence_idx: usize, node_type: NodeType) -> Self {
         Self {
             label,
@@ -180,7 +180,7 @@ impl TreeNode {
         }
     }
 
-    fn add_child(&mut self, child: TreeNode) {
+    fn add_child(&mut self, child: Node) {
         self.children.push(child);
     }
 
