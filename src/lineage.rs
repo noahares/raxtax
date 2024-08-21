@@ -90,10 +90,7 @@ impl<'a, 'b> Lineage<'a, 'b> {
             .into_iter()
             .sorted_by(|a, b| b.1.iter().partial_cmp(a.1.iter()).unwrap())
             .map(|(idx, conf_values, expected_conf_values)| {
-                let start_index = match expected_conf_values
-                    .iter()
-                    .find_position(|&&x| 1.0 - x > std::f64::EPSILON)
-                {
+                let start_index = match expected_conf_values.iter().find_position(|&&x| 1.0 > x) {
                     Some((i, _)) => i,
                     None => expected_conf_values.len() - 1,
                 };

@@ -17,6 +17,7 @@ pub fn raxtax<'a, 'b>(
     chunk_size: usize,
 ) -> Vec<Vec<lineage::EvaluationResult<'a, 'b>>> {
     let warnings = std::sync::Mutex::new(false);
+    let empty_vec = Vec::new();
     let pb = ProgressBar::new(query_labels.len() as u64)
         .with_style(
             ProgressStyle::with_template(
@@ -35,11 +36,11 @@ pub fn raxtax<'a, 'b>(
             l.iter().zip(s.iter()).map(|(query_label, query_sequence)| {
                 pb.inc(1);
                 intersect_buffer.fill(0);
-                let exact_matches = tree.sequences.get(query_sequence).map_or(Vec::new(), |m| m.clone());
+                let exact_matches = tree.sequences.get(query_sequence).unwrap_or(&empty_vec);
                 if !skip_exact_matches {
                     // check for inconsistencies for exact matches
                     let mut mtx = warnings.lock().unwrap();
-                    for id in &exact_matches {
+                    for id in exact_matches {
                         info!("Exact sequence match for query {query_label}: {}", tree.lineages[*id]);
                     }
                     if !exact_matches.iter().map(|&idx| tree.lineages[idx].rsplit_once(',').unwrap().0).all_equal() {
@@ -60,7 +61,7 @@ pub fn raxtax<'a, 'b>(
                     }
                 if skip_exact_matches {
                     // look for the next best match
-                    for &id in &exact_matches { unsafe { *intersect_buffer.get_unchecked_mut(id) = 0 } }
+                    for &id in exact_matches { unsafe { *intersect_buffer.get_unchecked_mut(id) = 0 } }
                 }
                 drop(tmr);
                 let highest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len() as u16, num_trials, &intersect_buffer);
