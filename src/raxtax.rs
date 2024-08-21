@@ -1,6 +1,9 @@
+use std::time::Duration;
+
 use crate::lineage;
+use crate::tree::Tree;
 use crate::{prob, utils};
-use indicatif::{ParallelProgressIterator, ProgressStyle};
+use indicatif::{ProgressBar, ProgressStyle};
 use itertools::Itertools;
 use log::{info, log_enabled, warn, Level};
 use logging_timer::{time, timer};
@@ -9,25 +12,28 @@ use rayon::prelude::*;
 #[time("info")]
 pub fn raxtax<'a, 'b>(
     (query_labels, query_sequences): &'b (Vec<String>, Vec<Vec<u8>>),
-    tree: &'a lineage::Tree,
+    tree: &'a Tree,
     skip_exact_matches: bool,
     chunk_size: usize,
 ) -> Vec<Vec<lineage::EvaluationResult<'a, 'b>>> {
     let warnings = std::sync::Mutex::new(false);
-    let results = query_labels
-        .par_chunks(chunk_size)
-        .zip_eq(query_sequences.par_chunks(chunk_size))
-        .progress_with_style(
+    let pb = ProgressBar::new(query_labels.len() as u64)
+        .with_style(
             ProgressStyle::with_template(
                 "[{elapsed_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7}[ETA:{eta}] {msg}",
             )
             .unwrap()
             .progress_chars("##-"),
         )
-        .with_message(format!("Running Queries... (chunk size = {})", chunk_size))
+        .with_message("Running Queries...");
+    pb.enable_steady_tick(Duration::from_millis(100));
+    let results = query_labels
+        .par_chunks(chunk_size)
+        .zip_eq(query_sequences.par_chunks(chunk_size))
         .flat_map(|(l, s)| {
             let mut intersect_buffer: Vec<u16> = vec![0; tree.num_tips];
             l.iter().zip(s.iter()).map(|(query_label, query_sequence)| {
+                pb.inc(1);
                 intersect_buffer.fill(0);
                 let exact_matches = tree.sequences.get(query_sequence).map_or(Vec::new(), |m| m.to_owned());
                 if !skip_exact_matches {

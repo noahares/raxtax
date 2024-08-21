@@ -189,6 +189,9 @@ mod tests {
             .collect_vec();
         assert_almost_eq!(p.iter().sum::<f64>(), 1.0, 1e-7);
         assert_almost_eq!(p2.iter().sum::<f64>(), 1.0, 1e-7);
+        p.iter()
+            .zip(p2)
+            .for_each(|(&a, b)| assert_almost_eq!(a, b, 1e-7));
     }
 
     #[test]
@@ -196,5 +199,6 @@ mod tests {
         let probs = highest_hit_prob_per_reference(400, 200, &(0..=400).collect_vec());
         dbg!(&probs);
         assert_almost_eq!(probs.iter().sum::<f64>(), 1.0, 1e-7);
+        assert!(probs.windows(2).all(|w| w[0] <= w[1]));
     }
 }

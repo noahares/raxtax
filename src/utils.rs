@@ -157,9 +157,12 @@ pub fn report_error(e: anyhow::Error, message: impl std::fmt::Display) {
 
 #[cfg(test)]
 mod tests {
+    use itertools::assert_equal;
     use statrs::assert_almost_eq;
 
     use crate::utils::{cosine_similarity, euclidean_distance_l1, euclidean_norm};
+
+    use super::{decompress_sequences, map_four_to_two_bit_repr, sequence_to_kmers};
 
     #[test]
     fn test_euclidean_norm() {
@@ -187,5 +190,41 @@ mod tests {
         let x = [0.5, 0.5];
         let y = [0.5, 0.5];
         assert_almost_eq!(cosine_similarity(&x, &y), 1.0, 1e-7);
+    }
+
+    #[test]
+    fn test_map() {
+        assert_equal(map_four_to_two_bit_repr(1), Some(0));
+        assert_equal(map_four_to_two_bit_repr(2), Some(1));
+        assert_equal(map_four_to_two_bit_repr(4), Some(2));
+        assert_equal(map_four_to_two_bit_repr(8), Some(3));
+        assert_equal(map_four_to_two_bit_repr(10), None);
+    }
+
+    #[test]
+    fn test_sequence_to_kmers() {
+        let sequence = vec![1, 2, 1, 4, 8, 2, 8, 4, 1, 4, 8, 2, 8, 4, 1, 4];
+        let kmers = sequence_to_kmers(&sequence);
+        assert!(kmers.windows(2).all(|w| w[0] <= w[1]));
+        assert_equal(
+            kmers,
+            vec![
+                0b0001001011011110,
+                0b0010110111100010,
+                0b0100101101111000,
+                0b0111100010110111,
+                0b1000101101111000,
+                0b1011011110001011,
+                0b1101111000101101,
+                0b1110001011011110,
+            ],
+        );
+    }
+
+    #[test]
+    fn test_decompress_sequence() {
+        let sequence = vec![vec![1_u8, 2, 1, 4, 8, 2, 8, 4, 1, 4, 8, 2, 8, 4, 1, 4]];
+        let decompressed = decompress_sequences(&sequence);
+        assert_equal(decompressed, vec![String::from("ACAGTCTGAGTCTGAG")]);
     }
 }

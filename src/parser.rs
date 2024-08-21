@@ -5,7 +5,7 @@ use logging_timer::{time, timer};
 use regex::Regex;
 use std::{io::Read, path::PathBuf};
 
-use crate::{lineage, utils};
+use crate::{tree::Tree, utils};
 
 fn map_dna_char(ch: char) -> u8 {
     let a: u8 = 0b0001;
@@ -33,8 +33,8 @@ fn map_dna_char(ch: char) -> u8 {
 }
 
 #[time("info")]
-pub fn parse_reference_fasta_file(sequence_path: &PathBuf) -> Result<(bool, lineage::Tree)> {
-    if let Ok(tree) = lineage::Tree::load_from_file(sequence_path) {
+pub fn parse_reference_fasta_file(sequence_path: &PathBuf) -> Result<(bool, Tree)> {
+    if let Ok(tree) = Tree::load_from_file(sequence_path) {
         return Ok((false, tree));
     }
     let mut fasta_str = String::new();
@@ -42,7 +42,7 @@ pub fn parse_reference_fasta_file(sequence_path: &PathBuf) -> Result<(bool, line
     Ok((true, parse_reference_fasta_str(&fasta_str)?))
 }
 
-pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<lineage::Tree> {
+fn parse_reference_fasta_str(fasta_str: &str) -> Result<Tree> {
     if fasta_str.is_empty() {
         bail!("File is empty")
     }
@@ -101,7 +101,7 @@ pub fn parse_reference_fasta_str(fasta_str: &str) -> Result<lineage::Tree> {
         }
         (labels, sequences)
     };
-    lineage::Tree::new(labels, sequences)
+    Tree::new(labels, sequences)
 }
 
 pub fn parse_query_fasta_file(sequence_path: &PathBuf) -> Result<(Vec<String>, Vec<Vec<u8>>)> {
@@ -111,7 +111,7 @@ pub fn parse_query_fasta_file(sequence_path: &PathBuf) -> Result<(Vec<String>, V
 }
 
 #[time("info")]
-pub fn parse_query_fasta_str(fasta_str: &str) -> Result<(Vec<String>, Vec<Vec<u8>>)> {
+fn parse_query_fasta_str(fasta_str: &str) -> Result<(Vec<String>, Vec<Vec<u8>>)> {
     if fasta_str.is_empty() {
         bail!("File is empty")
     }
@@ -150,7 +150,7 @@ pub fn parse_query_fasta_str(fasta_str: &str) -> Result<(Vec<String>, Vec<Vec<u8
 mod tests {
     use itertools::Itertools;
 
-    use crate::lineage::Tree;
+    use crate::tree::Tree;
 
     use super::{parse_query_fasta_str, parse_reference_fasta_str};
 
@@ -168,26 +168,38 @@ ATACGCTTTGCGT
 GTGCGCTATGCGA
 >Badabing|Badabum;tax=p:Phylum2,c:Class3,o:Order3,f:Family4,g:Genus4,s:Species5;
 ATACGCTTTGCGT";
-        let Tree { k_mer_map, .. } = parse_reference_fasta_str(fasta_str).unwrap();
-        for (k, v) in k_mer_map.iter().enumerate() {
+        let tree = parse_reference_fasta_str(fasta_str).unwrap();
+        for (k, v) in tree.k_mer_map.iter().enumerate() {
             if !v.is_empty() {
                 println!("{k:b}:\n {v:?}");
             }
         }
         assert_eq!(
-            k_mer_map[0b1010111111110_usize].iter().collect_vec(),
+            tree.k_mer_map[0b1010111111110_usize].iter().collect_vec(),
             &[&0_usize]
         );
         assert_eq!(
-            k_mer_map[0b11000110011111_usize]
+            tree.k_mer_map[0b11000110011111_usize]
                 .iter()
                 .sorted()
                 .collect_vec(),
             &[&1, &4, &5]
         );
         assert_eq!(
-            k_mer_map[0b110011100111010_usize].iter().collect_vec(),
+            tree.k_mer_map[0b110011100111010_usize].iter().collect_vec(),
             &[&3]
+        );
+        assert_eq!(tree.num_tips, 6);
+        assert_eq!(
+            tree.lineages,
+            vec![
+                String::from("p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species1"),
+                "p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species2".into(),
+                "p:Phylum1,c:Class1,o:Order1,f:Family1,g:Genus1,s:Species2".into(),
+                "p:Phylum1,c:Class1,o:Order4,f:Family5,g:Genus2,s:Species3".into(),
+                "p:Phylum1,c:Class2,o:Order2,f:Family3,g:Genus3,s:Species6".into(),
+                "p:Phylum2,c:Class3,o:Order3,f:Family4,g:Genus4,s:Species5".into(),
+            ]
         );
     }
 

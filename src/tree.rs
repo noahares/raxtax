@@ -1,0 +1,205 @@
+use anyhow::Result;
+use std::{
+    fs::File,
+    io::{Read, Write},
+    path::PathBuf,
+};
+
+use ahash::{HashMap, HashMapExt};
+use indicatif::{ProgressIterator, ProgressStyle};
+use itertools::Itertools;
+use log::{log_enabled, Level};
+use logging_timer::time;
+use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
+
+use crate::utils::map_four_to_two_bit_repr;
+
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Tree {
+    pub root: TreeNode,
+    pub lineages: Vec<String>,
+    pub sequences: HashMap<Vec<u8>, Vec<usize>>,
+    pub k_mer_map: Vec<Vec<usize>>,
+    pub num_tips: usize,
+}
+
+impl Tree {
+    #[time("info", "Tree::{}")]
+    pub fn new(lineages: Vec<String>, sequences: Vec<Vec<u8>>) -> Result<Self> {
+        let mut root = TreeNode::new(String::from("root"), 0, NodeType::Inner);
+        let mut sequence_map: HashMap<Vec<u8>, Vec<usize>> = HashMap::new();
+        let mut k_mer_map: Vec<Vec<usize>> = vec![Vec::new(); 2 << 15];
+        let mut lineage_sequence_pairs = lineages.into_iter().zip_eq(sequences).collect_vec();
+        lineage_sequence_pairs.sort_by(|(l1, _), (l2, _)| l1.cmp(l2));
+        let mut confidence_idx = 0_usize;
+        let _ = lineage_sequence_pairs
+            .iter()
+            .enumerate()
+            .progress_with_style(
+                ProgressStyle::with_template(
+                    "[{elapsed_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7}[ETA:{eta}] {msg}",
+                )
+                .unwrap()
+                .progress_chars("##-"),
+            )
+            .with_message("Creating lineage tree and k-mer map...")
+            .map(|(idx, (lineage, sequence))| -> Result<()> {
+                let levels = lineage.split(',').collect_vec();
+                let last_level_idx = levels.len() - 1;
+                let mut current_node = &mut root;
+                for (level, &label) in levels.iter().enumerate() {
+                    let node_type = if level == last_level_idx {
+                        NodeType::Taxon
+                    } else {
+                        NodeType::Inner
+                    };
+                    match &current_node.get_last_child_label() {
+                        Some(name) => {
+                            if name.as_str() != label {
+                                current_node.add_child(TreeNode::new(
+                                    label.to_owned(),
+                                    confidence_idx,
+                                    node_type,
+                                ));
+                            }
+                            current_node.confidence_range.1 = confidence_idx + 1;
+                        }
+                        None => {
+                            current_node.add_child(TreeNode::new(
+                                label.to_owned(),
+                                confidence_idx,
+                                node_type,
+                            ));
+                            current_node.confidence_range.1 = confidence_idx + 1;
+                        }
+                    };
+                    if level == last_level_idx {
+                        confidence_idx += 1;
+                    }
+                    current_node = current_node.children.last_mut().unwrap();
+                }
+                current_node.add_child(TreeNode::new(
+                    current_node.label.to_owned(),
+                    confidence_idx - 1,
+                    NodeType::Sequence,
+                ));
+                current_node.confidence_range.1 = confidence_idx;
+
+                sequence_map.entry(sequence.clone()).or_default().push(idx);
+
+                sequence.windows(8).for_each(|vals| {
+                    if let Some(k_mer) = vals
+                        .iter()
+                        .enumerate()
+                        .map(|(j, v)| map_four_to_two_bit_repr(*v).map(|c| c << (14 - j * 2)))
+                        .fold_options(0_u16, |acc, c| acc | c)
+                    {
+                        k_mer_map[k_mer as usize].push(idx);
+                    }
+                });
+                Ok(())
+            })
+            .collect::<Result<Vec<()>>>()?;
+        root.confidence_range.1 = confidence_idx;
+        let (sorted_lineages, _): (Vec<String>, Vec<Vec<u8>>) =
+            lineage_sequence_pairs.into_iter().unzip();
+        Ok(Self {
+            root,
+            lineages: sorted_lineages,
+            sequences: sequence_map,
+            k_mer_map: k_mer_map
+                .into_par_iter()
+                .map(|seqs| seqs.into_iter().unique().sorted().collect_vec())
+                .collect(),
+            num_tips: confidence_idx,
+        })
+    }
+
+    pub fn print(&self) {
+        self.root.print(0);
+    }
+
+    #[time("info")]
+    pub fn save_to_file(&self, mut output: Box<dyn Write>) -> Result<()> {
+        if log_enabled!(Level::Info) {
+            println!("Writing database to file...");
+        }
+        bincode::serialize_into(&mut output, &self)?;
+        Ok(())
+    }
+
+    pub fn load_from_file(path: &PathBuf) -> Result<Self> {
+        if log_enabled!(Level::Info) {
+            println!("Trying to read from database file...");
+        }
+        let mut file = File::open(path)?;
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer)?;
+        let decoded: Self = bincode::deserialize(&buffer)?;
+        Ok(decoded)
+    }
+
+    pub fn get_shared_exact_match(&self, num_levels: usize, num_shared: usize) -> Vec<f64> {
+        let mut values = vec![1.0; num_levels];
+        values.push(1.0 / num_shared as f64);
+        values
+    }
+
+    pub fn is_inner_taxon_node(&self, node: &TreeNode) -> bool {
+        node.node_type == NodeType::Inner
+    }
+
+    pub fn is_taxon_leaf(&self, node: &TreeNode) -> bool {
+        node.node_type == NodeType::Taxon
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+enum NodeType {
+    Inner,
+    Taxon,
+    Sequence,
+}
+
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct TreeNode {
+    label: String,
+    pub confidence_range: (usize, usize),
+    pub children: Vec<TreeNode>,
+    node_type: NodeType,
+}
+
+impl TreeNode {
+    fn new(label: String, confidence_idx: usize, node_type: NodeType) -> Self {
+        Self {
+            label,
+            confidence_range: (confidence_idx, confidence_idx + 1),
+            children: vec![],
+            node_type,
+        }
+    }
+
+    fn add_child(&mut self, child: TreeNode) {
+        self.children.push(child);
+    }
+
+    fn get_last_child_label(&self) -> Option<&String> {
+        match &self.children.last() {
+            Some(c) => Some(&c.label),
+            None => None,
+        }
+    }
+
+    fn print(&self, depth: usize) {
+        println!(
+            "{}{} {:?}",
+            "  ".repeat(depth),
+            self.label,
+            self.confidence_range
+        );
+        for child in &self.children {
+            child.print(depth + 1);
+        }
+    }
+}
