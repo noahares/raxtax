@@ -103,14 +103,14 @@ fn parse_reference_fasta_str(fasta_str: &str) -> Result<Tree> {
     Tree::new(labels, sequences)
 }
 
-pub fn parse_query_fasta_file(sequence_path: &PathBuf) -> Result<(Vec<String>, Vec<Vec<u8>>)> {
+pub fn parse_query_fasta_file(sequence_path: &PathBuf) -> Result<Vec<(String, Vec<u8>)>> {
     let mut fasta_str = String::new();
     let _ = utils::get_reader(sequence_path)?.read_to_string(&mut fasta_str);
     parse_query_fasta_str(&fasta_str)
 }
 
 #[time("info")]
-fn parse_query_fasta_str(fasta_str: &str) -> Result<(Vec<String>, Vec<Vec<u8>>)> {
+fn parse_query_fasta_str(fasta_str: &str) -> Result<Vec<(String, Vec<u8>)>> {
     if fasta_str.is_empty() {
         bail!("File is empty")
     }
@@ -122,27 +122,25 @@ fn parse_query_fasta_str(fasta_str: &str) -> Result<(Vec<String>, Vec<Vec<u8>>)>
     if !lines[0].starts_with('>') {
         bail!("Not a valid FASTA file")
     }
-    let mut labels: Vec<String> = Vec::new();
-    let mut sequences: Vec<Vec<u8>> = Vec::new();
-    let mut current_sequence = Vec::<u8>::new();
+    let mut queries: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut current_query: (String, Vec<u8>) = (String::new(), Vec::new());
 
     // create label and sequence vectors
     for line in lines {
         if let Some(label) = line.strip_prefix('>') {
-            labels.push(label.to_string());
-            if !current_sequence.is_empty() {
-                sequences.push(current_sequence);
-                current_sequence = Vec::new();
+            if !current_query.1.is_empty() {
+                queries.push(current_query.clone());
+                current_query.1 = Vec::new();
             }
+            current_query.0 = label.to_string();
         } else {
-            current_sequence.extend(line.chars().map(|c| -> u8 { map_dna_char(c) }));
+            current_query
+                .1
+                .extend(line.chars().map(|c| -> u8 { map_dna_char(c) }));
         }
     }
-    sequences.push(current_sequence);
-    if labels.len() != sequences.len() {
-        bail!("Number of sequences does not match number of labels")
-    }
-    Ok((labels, sequences))
+    queries.push(current_query);
+    Ok(queries)
 }
 
 #[cfg(test)]
@@ -210,14 +208,14 @@ ATACGCTTTGCGT";
     fn test_query_parser() {
         let fasta_str = r">label1
 AAACCCTTTGGGA";
-        let (_, sequences) = parse_query_fasta_str(fasta_str).unwrap();
-        assert_eq!(sequences[0], &[1, 1, 1, 2, 2, 2, 8, 8, 8, 4, 4, 4, 1]);
+        let (_, sequence) = &parse_query_fasta_str(fasta_str).unwrap()[0];
+        assert_eq!(sequence, &[1, 1, 1, 2, 2, 2, 8, 8, 8, 4, 4, 4, 1]);
 
         let fasta_str2 = r">label1
 ACGTWSMKRYBDHVN";
-        let (_, sequences) = parse_query_fasta_str(fasta_str2).unwrap();
+        let (_, sequence) = &parse_query_fasta_str(fasta_str2).unwrap()[0];
         assert_eq!(
-            sequences[0],
+            sequence,
             &[1, 2, 4, 8, 9, 6, 3, 12, 5, 10, 14, 13, 11, 7, 15]
         );
     }

@@ -68,7 +68,7 @@ fn main() {
     }
 
     // Parse queries
-    let query_data = parser::parse_query_fasta_file(&args.query_file).unwrap_or_else(|e| {
+    let queries = parser::parse_query_fasta_file(&args.query_file).unwrap_or_else(|e| {
         utils::report_error(e, format!("Failed to parse {}", args.query_file.display()));
         exit(exitcode::NOINPUT);
     });
@@ -76,13 +76,13 @@ fn main() {
     // Compute query results and output to files
     let n_threads = rayon::current_num_threads();
     let chunk_size = if n_threads == 1 {
-        query_data.0.len()
+        queries.len()
     } else {
-        ((query_data.0.len() / (n_threads * 10)) + 1).max(100)
+        ((queries.len() / (n_threads * 10)) + 1).max(100)
     };
-    let result = raxtax(&query_data, &tree, args.skip_exact_matches, chunk_size);
+    let result = raxtax(&queries, &tree, args.skip_exact_matches, chunk_size);
     if let Some(tsv_output) = tsv_output {
-        let sequences: Vec<String> = utils::decompress_sequences(&query_data.1);
+        let sequences: Vec<String> = utils::decompress_sequences(&queries);
         if let Err(e) = utils::output_results_tsv(&result, sequences, tsv_output) {
             utils::report_error(e, "Failed to write results to file");
             exit(exitcode::IOERR);

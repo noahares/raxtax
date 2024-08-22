@@ -72,10 +72,10 @@ pub fn output_results(
     Ok(())
 }
 
-pub fn decompress_sequences(sequences: &[Vec<u8>]) -> Vec<String> {
+pub fn decompress_sequences(sequences: &[(String, Vec<u8>)]) -> Vec<String> {
     sequences
         .iter()
-        .map(|s| {
+        .map(|(_, s)| {
             s.iter()
                 .map(|c| match c {
                     0b0001 => 'A',
@@ -223,7 +223,10 @@ mod tests {
 
     #[test]
     fn test_decompress_sequence() {
-        let sequence = vec![vec![1_u8, 2, 1, 4, 8, 2, 8, 4, 1, 4, 8, 2, 8, 4, 1, 4]];
+        let sequence = vec![(
+            String::from("label1"),
+            vec![1_u8, 2, 1, 4, 8, 2, 8, 4, 1, 4, 8, 2, 8, 4, 1, 4],
+        )];
         let decompressed = decompress_sequences(&sequence);
         assert_equal(decompressed, vec![String::from("ACAGTCTGAGTCTGAG")]);
     }

@@ -11,14 +11,14 @@ use rayon::prelude::*;
 
 #[time("info")]
 pub fn raxtax<'a, 'b>(
-    (query_labels, query_sequences): &'b (Vec<String>, Vec<Vec<u8>>),
+    queries: &'b Vec<(String, Vec<u8>)>,
     tree: &'a Tree,
     skip_exact_matches: bool,
     chunk_size: usize,
 ) -> Vec<Vec<lineage::EvaluationResult<'a, 'b>>> {
     let warnings = std::sync::Mutex::new(false);
     let empty_vec = Vec::new();
-    let pb = ProgressBar::new(query_labels.len() as u64)
+    let pb = ProgressBar::new(queries.len() as u64)
         .with_style(
             ProgressStyle::with_template(
                 "[{elapsed_precise}] {bar:80.cyan/blue} {pos:>7}/{len:7}[ETA:{eta}] {msg}",
@@ -28,12 +28,11 @@ pub fn raxtax<'a, 'b>(
         )
         .with_message("Running Queries...");
     pb.enable_steady_tick(Duration::from_millis(100));
-    let results = query_labels
+    let results = queries
         .par_chunks(chunk_size)
-        .zip_eq(query_sequences.par_chunks(chunk_size))
-        .flat_map(|(l, s)| {
+        .flat_map(|q| {
             let mut intersect_buffer: Vec<u16> = vec![0; tree.num_tips];
-            l.iter().zip(s.iter()).map(|(query_label, query_sequence)| {
+            q.iter().map(|(query_label, query_sequence)| {
                 pb.inc(1);
                 intersect_buffer.fill(0);
                 let exact_matches = tree.sequences.get(query_sequence).unwrap_or(&empty_vec);
