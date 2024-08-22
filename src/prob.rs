@@ -11,10 +11,10 @@ pub fn highest_hit_prob_per_reference(
     intersection_sizes: &[u16],
 ) -> Vec<f64> {
     let intersection_size_counts = {
-        let mut counts: HashMap<&u16, usize> = HashMap::new();
+        let mut counts: HashMap<u16, usize> = HashMap::new();
         intersection_sizes
             .iter()
-            .for_each(|item| *counts.entry(item).or_default() += 1);
+            .for_each(|item| *counts.entry(*item).or_default() += 1);
         counts
     };
     let num_possible_kmer_sets = ln_binomial(
@@ -23,16 +23,15 @@ pub fn highest_hit_prob_per_reference(
     );
     let highest_hit_probs = if intersection_size_counts
         .iter()
-        .any(|(&&i, _)| i == total_num_k_mers)
+        .any(|(&i, _)| i == total_num_k_mers)
     {
         intersection_size_counts
             .iter()
-            .map(|(&&n_intersections, _)| {
+            .map(|(&n_intersections, _)| {
                 (
                     n_intersections,
-                    pmf(
+                    only_last_pmf(
                         total_num_k_mers as u64,
-                        num_trials as u64,
                         num_trials as u64,
                         n_intersections as u64,
                         num_possible_kmer_sets,
@@ -41,20 +40,18 @@ pub fn highest_hit_prob_per_reference(
             })
             .collect::<HashMap<u16, f64>>()
     } else {
-        let pmfs: Vec<(u16, Vec<f64>)> = intersection_size_counts
+        let sorted_intersection_sizes = intersection_size_counts
             .iter()
-            .map(|(&&n_intersections, _)| {
-                (
-                    n_intersections,
-                    iterative_pmfs(
-                        total_num_k_mers as u64,
-                        num_trials as u64,
-                        n_intersections as u64,
-                        num_possible_kmer_sets,
-                    ),
-                )
-            })
+            .map(|(k, v)| (*k, v))
+            .sorted()
             .collect_vec();
+        let pmfs: Vec<(u16, Vec<f64>)> = iterative_pmfs(
+            total_num_k_mers as u64,
+            num_trials as u64,
+            &sorted_intersection_sizes,
+            num_possible_kmer_sets,
+        );
+        assert!(pmfs.iter().all(|v| v.1.iter().all(|a| a.is_finite())));
         let cmfs: Vec<Vec<f64>> = pmfs
             .iter()
             .map(|(_, v)| {
@@ -68,10 +65,10 @@ pub fn highest_hit_prob_per_reference(
             .collect_vec();
         let cmf_prod_components = (0..=num_trials)
             .map(|i| {
-                intersection_size_counts
+                sorted_intersection_sizes
                     .iter()
                     .zip_eq(cmfs.iter())
-                    .map(|((_, &count), cmf)| {
+                    .map(|(&(_, &count), cmf)| {
                         let x = unsafe { *cmf.get_unchecked(i) };
                         (count as f64) * x.ln()
                     })
@@ -109,70 +106,94 @@ pub fn highest_hit_prob_per_reference(
         .collect_vec()
 }
 
-pub fn pmf(
+fn only_last_pmf(
     total_num_k_mers: u64,
-    i: u64,
     num_trials: u64,
     num_intersections: u64,
     num_possible_kmer_sets: f64,
 ) -> f64 {
     if num_intersections == total_num_k_mers {
-        if i == num_trials {
-            return 1.0;
-        }
-        return 0.0;
+        return 1.0;
     }
     if num_intersections == 0 {
-        if i == 0 {
-            return 1.0;
-        }
         return 0.0;
     }
-    let num_possible_matches = ln_binomial(num_intersections + i - 1, i);
-    let num_impossible_matches = ln_binomial(
-        (total_num_k_mers - num_intersections) + (num_trials - i) - 1,
-        num_trials - i,
-    );
+    let num_possible_matches = ln_binomial(num_intersections + num_trials - 1, num_trials);
+    let num_impossible_matches = 0.0;
     (num_possible_matches + num_impossible_matches - num_possible_kmer_sets).exp()
 }
 
-pub fn iterative_pmfs(
+fn iterative_pmfs(
     total_num_k_mers: u64,
     num_trials: u64,
-    num_intersections: u64,
+    sorted_intersection_sizes: &[(u16, &usize)],
     num_possible_kmer_sets: f64,
-) -> Vec<f64> {
-    if num_intersections == total_num_k_mers {
-        let mut res = vec![0.0; num_trials as usize + 1];
-        res[num_trials as usize] = 1.0;
-        return res;
-    }
-    if num_intersections == 0 {
-        let mut res = vec![0.0; num_trials as usize + 1];
-        res[0] = 1.0;
-        return res;
-    }
-    let mut num_possible_matches = vec![0.0];
-    num_possible_matches.extend((1..=num_trials).scan(0.0, |sum, i| {
-        *sum += ((num_intersections + i - 1) as f64).ln() - (i as f64).ln();
-        Some(*sum)
-    }));
-    let impossible_init = ln_binomial(
-        total_num_k_mers - num_intersections + num_trials - 1,
+) -> Vec<(u16, Vec<f64>)> {
+    assert!(!sorted_intersection_sizes.is_empty());
+    debug_assert!(sorted_intersection_sizes.windows(2).all(|w| w[0] <= w[1]));
+    let (impossible_matches_base_n, impossible_matches_base_k) = (
+        total_num_k_mers - sorted_intersection_sizes[0].0 as u64 + num_trials - 1,
         num_trials,
     );
-    let mut num_impossible_matches = vec![impossible_init];
-    num_impossible_matches.extend((1..num_trials).scan(impossible_init, |sum, i| {
-        *sum -= ((total_num_k_mers - num_intersections + num_trials - i) as f64).ln()
-            - ((num_trials - i + 1) as f64).ln();
-        Some(*sum)
-    }));
-    num_impossible_matches.push(0.0);
-    num_possible_matches
-        .into_iter()
-        .zip_eq(num_impossible_matches)
-        .map(|(p, i)| (p + i - num_possible_kmer_sets).exp())
-        .collect_vec()
+    let impossible_matches_base = ln_binomial(impossible_matches_base_n, impossible_matches_base_k);
+    let impossible_matches_zero_trials = {
+        let mut v = vec![impossible_matches_base];
+        let mut prev_intersection_size = sorted_intersection_sizes[0].0;
+        v.extend(sorted_intersection_sizes[1..].iter().scan(
+            impossible_matches_base,
+            |sum, &(i, _)| {
+                let intersection_diff = i - prev_intersection_size;
+                let impossible_matches_n =
+                    total_num_k_mers - prev_intersection_size as u64 + num_trials - 1;
+                *sum += (0..intersection_diff)
+                    .map(|j| {
+                        ((impossible_matches_n - impossible_matches_base_k - j as u64) as f64).ln()
+                            - ((impossible_matches_n - j as u64) as f64).ln()
+                    })
+                    .sum::<f64>();
+                prev_intersection_size = i;
+                Some(*sum)
+            },
+        ));
+        v
+    };
+    sorted_intersection_sizes
+        .iter()
+        .zip_eq(impossible_matches_zero_trials)
+        .map(|(&(num_intersections, _), impossible_init)| {
+            if num_intersections as u64 == total_num_k_mers {
+                let mut res = vec![0.0_f64; num_trials as usize + 1];
+                res[num_trials as usize] = 1.0;
+                (num_intersections, res)
+            } else if num_intersections == 0 {
+                let mut res = vec![0.0; num_trials as usize + 1];
+                res[0] = 1.0;
+                (num_intersections, res)
+            } else {
+                let mut num_possible_matches = vec![0.0];
+                num_possible_matches.extend((1..=num_trials).scan(0.0, |sum, i| {
+                    *sum += ((num_intersections as u64 + i - 1) as f64).ln() - (i as f64).ln();
+                    Some(*sum)
+                }));
+                let mut num_impossible_matches = vec![impossible_init];
+                num_impossible_matches.extend((1..num_trials).scan(impossible_init, |sum, i| {
+                    *sum -= ((total_num_k_mers - num_intersections as u64 + num_trials - i) as f64)
+                        .ln()
+                        - ((num_trials - i + 1) as f64).ln();
+                    Some(*sum)
+                }));
+                num_impossible_matches.push(0.0);
+                (
+                    num_intersections,
+                    num_possible_matches
+                        .into_iter()
+                        .zip_eq(num_impossible_matches)
+                        .map(|(p, i)| (p + i - num_possible_kmer_sets).exp())
+                        .collect_vec(),
+                )
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -182,18 +203,46 @@ mod tests {
 
     use crate::prob::iterative_pmfs;
 
-    use super::{highest_hit_prob_per_reference, pmf};
+    use super::highest_hit_prob_per_reference;
 
+    fn pmf(
+        total_num_k_mers: u64,
+        i: u64,
+        num_trials: u64,
+        num_intersections: u64,
+        num_possible_kmer_sets: f64,
+    ) -> f64 {
+        if num_intersections == total_num_k_mers {
+            if i == num_trials {
+                return 1.0;
+            }
+            return 0.0;
+        }
+        if num_intersections == 0 {
+            if i == 0 {
+                return 1.0;
+            }
+            return 0.0;
+        }
+        let num_possible_matches = ln_binomial(num_intersections + i - 1, i);
+        let num_impossible_matches = ln_binomial(
+            (total_num_k_mers - num_intersections) + (num_trials - i) - 1,
+            num_trials - i,
+        );
+        (num_possible_matches + num_impossible_matches - num_possible_kmer_sets).exp()
+    }
     #[test]
     fn test_pmf() {
         let num_possible_kmer_sets = ln_binomial(200 + 32 - 1, 32);
-        let p = iterative_pmfs(200, 32, 50, num_possible_kmer_sets);
+        let p = iterative_pmfs(200, 32, &[(50, &4)], num_possible_kmer_sets);
         let p2 = (0..=32)
             .map(|i| pmf(200, i, 32, 50, num_possible_kmer_sets))
             .collect_vec();
-        assert_almost_eq!(p.iter().sum::<f64>(), 1.0, 1e-7);
+        assert_almost_eq!(p[0].1.iter().sum::<f64>(), 1.0, 1e-7);
         assert_almost_eq!(p2.iter().sum::<f64>(), 1.0, 1e-7);
-        p.iter()
+        // assert_eq!(0, 1);
+        p[0].1
+            .iter()
             .zip(p2)
             .for_each(|(&a, b)| assert_almost_eq!(a, b, 1e-7));
     }
