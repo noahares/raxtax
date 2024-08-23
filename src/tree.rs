@@ -25,7 +25,7 @@ pub struct Tree {
 }
 
 impl Tree {
-    #[time("info", "Tree::{}")]
+    #[time("debug", "Tree::{}")]
     pub fn new(lineages: Vec<String>, sequences: Vec<Vec<u8>>) -> Result<Self> {
         let mut root = Node::new(String::from("root"), 0, NodeType::Inner);
         let mut sequence_map: HashMap<Vec<u8>, Vec<usize>> = HashMap::new();
@@ -120,10 +120,10 @@ impl Tree {
         self.root.print(0);
     }
 
-    #[time("info")]
+    #[time("debug")]
     pub fn save_to_file(&self, mut output: Box<dyn Write>) -> Result<()> {
         if log_enabled!(Level::Info) {
-            println!("Writing database to file...");
+            eprintln!("Writing database to file...");
         }
         bincode::serialize_into(&mut output, &self)?;
         Ok(())
@@ -131,7 +131,7 @@ impl Tree {
 
     pub fn load_from_file(path: &PathBuf) -> Result<Self> {
         if log_enabled!(Level::Info) {
-            println!("Trying to read from database file...");
+            eprintln!("Trying to read from database file...");
         }
         let mut file = File::open(path)?;
         let mut buffer = Vec::new();

@@ -103,13 +103,13 @@ fn parse_reference_fasta_str(fasta_str: &str) -> Result<Tree> {
     Tree::new(labels, sequences)
 }
 
+#[time("info")]
 pub fn parse_query_fasta_file(sequence_path: &PathBuf) -> Result<Vec<(String, Vec<u8>)>> {
     let mut fasta_str = String::new();
     let _ = utils::get_reader(sequence_path)?.read_to_string(&mut fasta_str);
     parse_query_fasta_str(&fasta_str)
 }
 
-#[time("info")]
 fn parse_query_fasta_str(fasta_str: &str) -> Result<Vec<(String, Vec<u8>)>> {
     if fasta_str.is_empty() {
         bail!("File is empty")

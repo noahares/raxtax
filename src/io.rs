@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use clap::Parser;
-use clap_verbosity_flag::{Verbosity, WarnLevel};
+use clap_verbosity_flag::{Verbosity, InfoLevel};
 use log::info;
 use std::{
     io::{BufWriter, Write},
@@ -42,7 +42,7 @@ pub struct Args {
     #[arg(long)]
     pub redo: bool,
     #[command(flatten)]
-    pub verbosity: Verbosity<WarnLevel>,
+    pub verbosity: Verbosity<InfoLevel>,
 }
 
 impl Args {
