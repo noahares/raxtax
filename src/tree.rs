@@ -5,7 +5,7 @@ use std::{
     path::PathBuf,
 };
 
-use ahash::{HashMap, HashMapExt};
+use ahash::HashMap;
 use indicatif::{ProgressIterator, ProgressStyle};
 use itertools::Itertools;
 use log::{log_enabled, Level};
@@ -28,7 +28,8 @@ impl Tree {
     #[time("debug", "Tree::{}")]
     pub fn new(lineages: Vec<String>, sequences: Vec<Vec<u8>>) -> Result<Self> {
         let mut root = Node::new(String::from("root"), 0, NodeType::Inner);
-        let mut sequence_map: HashMap<Vec<u8>, Vec<usize>> = HashMap::new();
+        let mut sequence_map: HashMap<Vec<u8>, Vec<usize>> =
+            sequences.iter().map(|s| (s.clone(), Vec::with_capacity(2))).collect();
         let mut k_mer_map: Vec<Vec<usize>> = vec![Vec::new(); 2 << 15];
         let mut lineage_sequence_pairs = lineages.into_iter().zip_eq(sequences).collect_vec();
         lineage_sequence_pairs.sort_by(|(l1, _), (l2, _)| l1.cmp(l2));
@@ -48,7 +49,7 @@ impl Tree {
                 let levels = lineage.split(',').collect_vec();
                 let last_level_idx = levels.len() - 1;
                 let mut current_node = &mut root;
-                for (level, &label) in levels.iter().enumerate() {
+                for (level, label) in levels.into_iter().enumerate() {
                     let node_type = if level == last_level_idx {
                         NodeType::Taxon
                     } else {
@@ -58,7 +59,7 @@ impl Tree {
                         Some(name) => {
                             if name.as_str() != label {
                                 current_node.add_child(Node::new(
-                                    label.to_owned(),
+                                    label.to_string(),
                                     confidence_idx,
                                     node_type,
                                 ));
@@ -67,7 +68,7 @@ impl Tree {
                         }
                         None => {
                             current_node.add_child(Node::new(
-                                label.to_owned(),
+                                label.to_string(),
                                 confidence_idx,
                                 node_type,
                             ));
@@ -86,7 +87,7 @@ impl Tree {
                 ));
                 current_node.confidence_range.1 = confidence_idx;
 
-                sequence_map.entry(sequence.clone()).or_default().push(idx);
+                sequence_map.get_mut(sequence).unwrap().push(idx);
 
                 sequence.windows(8).for_each(|vals| {
                     if let Some(k_mer) = vals

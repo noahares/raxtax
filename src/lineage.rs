@@ -64,13 +64,15 @@ impl<'a, 'b> Lineage<'a, 'b> {
             *sum += i;
             Some(*sum)
         }));
+        let rounding_factor = f64::from(10_u32.pow(utils::F64_OUTPUT_ACCURACY));
+        let expected_num_results = rounding_factor as usize / 2;
         Self {
             query_label,
             tree,
             confidence_values,
             confidence_prefix_sum,
-            confidence_vectors: Vec::new(),
-            rounding_factor: f64::from(10_u32.pow(utils::F64_OUTPUT_ACCURACY)),
+            confidence_vectors: Vec::with_capacity(expected_num_results),
+            rounding_factor,
         }
     }
 
