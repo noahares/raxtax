@@ -125,14 +125,14 @@ impl<'a, 'b> Lineage<'a, 'b> {
         let mut no_child_significant = true;
         let mut pushed_result = false;
         for c in &node.children {
-            let mut conf_prefix = confidence_prefix.to_vec();
-            let mut expected_conf_prefix = expected_confidence_prefix.to_vec();
             let child_conf =
                 (self.get_confidence(c) * self.rounding_factor).round() / self.rounding_factor;
             if child_conf == 0.0 {
                 continue;
             }
             no_child_significant = false;
+            let mut conf_prefix = confidence_prefix.to_vec();
+            let mut expected_conf_prefix = expected_confidence_prefix.to_vec();
             conf_prefix.push(child_conf);
             expected_conf_prefix.push(
                 (c.confidence_range.1 - c.confidence_range.0) as f64 / self.tree.num_tips as f64,

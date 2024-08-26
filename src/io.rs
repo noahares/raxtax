@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use clap::Parser;
-use clap_verbosity_flag::{Verbosity, InfoLevel};
+use clap_verbosity_flag::{InfoLevel, Verbosity};
 use log::info;
 use std::{
     io::{BufWriter, Write},

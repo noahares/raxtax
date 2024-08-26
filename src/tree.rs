@@ -29,7 +29,7 @@ impl Tree {
     pub fn new(lineages: Vec<String>, sequences: Vec<Vec<u8>>) -> Result<Self> {
         let mut root = Node::new(String::from("root"), 0, NodeType::Inner);
         let mut sequence_map: HashMap<Vec<u8>, Vec<usize>> =
-            sequences.iter().map(|s| (s.clone(), Vec::with_capacity(2))).collect();
+            sequences.iter().map(|s| (s.clone(), Vec::new())).collect();
         let mut k_mer_map: Vec<Vec<usize>> = vec![Vec::new(); 2 << 15];
         let mut lineage_sequence_pairs = lineages.into_iter().zip_eq(sequences).collect_vec();
         lineage_sequence_pairs.sort_by(|(l1, _), (l2, _)| l1.cmp(l2));

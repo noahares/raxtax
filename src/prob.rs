@@ -136,29 +136,32 @@ fn iterative_pmfs_ln(
                 res[0] = 0.0;
                 (num_intersections, res)
             } else {
-                let mut num_possible_matches = vec![0.0];
-                num_possible_matches.extend((1..=num_trials).scan(0.0, |sum, i| {
+                let num_possible_matches = (1..=num_trials).scan(0.0, |sum, i| {
                     *sum += ((num_intersections as u64 + i - 1) as f64 / i as f64).ln();
                     Some(*sum)
-                }));
+                });
                 let impossible_init = ln_binomial(
                     total_num_k_mers - num_intersections as u64 + num_trials - 1,
                     num_trials,
                 );
-                let mut num_impossible_matches = vec![impossible_init];
-                num_impossible_matches.extend((1..num_trials).scan(impossible_init, |sum, i| {
-                    *sum -= ((total_num_k_mers - num_intersections as u64 + num_trials - i) as f64
-                        / (num_trials - i + 1) as f64)
-                        .ln();
-                    Some(*sum)
-                }));
-                num_impossible_matches.push(0.0);
+                let num_impossible_matches = (1..num_trials)
+                    .scan(impossible_init, |sum, i| {
+                        *sum -= ((total_num_k_mers - num_intersections as u64 + num_trials - i)
+                            as f64
+                            / (num_trials - i + 1) as f64)
+                            .ln();
+                        Some(*sum)
+                    })
+                    .chain([0.0]);
                 (
                     num_intersections,
-                    num_possible_matches
+                    [impossible_init - num_possible_kmer_sets]
                         .into_iter()
-                        .zip_eq(num_impossible_matches)
-                        .map(|(p, i)| p + i - num_possible_kmer_sets)
+                        .chain(
+                            num_possible_matches
+                                .zip_eq(num_impossible_matches)
+                                .map(|(p, i)| p + i - num_possible_kmer_sets),
+                        )
                         .collect_vec(),
                 )
             }
