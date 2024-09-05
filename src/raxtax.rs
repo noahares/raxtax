@@ -29,7 +29,7 @@ pub fn raxtax<'a, 'b>(
         .with_message("Running Queries...");
     pb.enable_steady_tick(Duration::from_millis(100));
     let results = queries
-        .par_chunks(chunk_size)
+        .chunks(chunk_size)
         .flat_map(|q| {
             let mut intersect_buffer: Vec<u16> = vec![0; tree.num_tips];
             q.iter().map(|(query_label, query_sequence)| {
@@ -42,10 +42,10 @@ pub fn raxtax<'a, 'b>(
                     for id in exact_matches {
                         info!("Exact sequence match for query {query_label}: {}", tree.lineages[*id]);
                     }
-                    if !exact_matches.iter().map(|&idx| tree.lineages[idx].rsplit_once(',').unwrap().0).all_equal() {
-                        warn!("Exact matches for {query_label} differ above the leafs of the lineage tree!");
-                        *mtx = true;
-                    }
+                    // if !exact_matches.iter().map(|&idx| tree.lineages[idx].rsplit_once(',').unwrap().0).all_equal() {
+                    //     warn!("Exact matches for {query_label} differ above the leafs of the lineage tree!");
+                    //     *mtx = true;
+                    // }
                 }
                 let tmr = timer!(Level::Debug; "K-mer Intersections");
                 let k_mers = utils::sequence_to_kmers(query_sequence);
@@ -58,22 +58,24 @@ pub fn raxtax<'a, 'b>(
                                 unsafe { *intersect_buffer.get_unchecked_mut(*sequence_id) += 1 };
                             });
                     }
+                println!("{}\t{}", query_label, intersect_buffer.iter().map(|i| i.to_string()).join("\t"));
                 if skip_exact_matches {
                     // look for the next best match
                     for &id in exact_matches { unsafe { *intersect_buffer.get_unchecked_mut(id) = 0 } }
                 }
                 drop(tmr);
-                let highest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len() as u16, num_trials, &intersect_buffer);
-                let eval_res = lineage::Lineage::new(query_label, tree, highest_hit_probs).evaluate();
-                // Special case: if there is exactly 1 exact match, confidence is set to 1.0
-                if let [idx] = exact_matches[..] {
-                    assert!(!eval_res.is_empty());
-                    let mut best_hit = eval_res[0].clone();
-                    best_hit.confidence_values = tree.get_shared_exact_match(tree.lineages[idx].chars().filter(|c| *c == ',').count(), 1);
-                    vec![best_hit]
-                } else {
-                    eval_res
-                }
+                // let highest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len() as u16, num_trials, &intersect_buffer);
+                // let eval_res = lineage::Lineage::new(query_label, tree, highest_hit_probs).evaluate();
+                // // Special case: if there is exactly 1 exact match, confidence is set to 1.0
+                // if let [idx] = exact_matches[..] {
+                //     assert!(!eval_res.is_empty());
+                //     let mut best_hit = eval_res[0].clone();
+                //     best_hit.confidence_values = tree.get_shared_exact_match(tree.lineages[idx].chars().filter(|c| *c == ',').count(), 1);
+                //     vec![best_hit]
+                // } else {
+                //     eval_res
+                // }
+                Vec::new()
             }).collect_vec()
         })
         .collect::<Vec<Vec<lineage::EvaluationResult<'a, 'b>>>>();

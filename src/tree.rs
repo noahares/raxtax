@@ -46,47 +46,48 @@ impl Tree {
             )
             .with_message("Creating lineage tree and k-mer map...")
             .map(|(idx, (lineage, sequence))| -> Result<()> {
-                let levels = lineage.split(',').collect_vec();
-                let last_level_idx = levels.len() - 1;
-                let mut current_node = &mut root;
-                for (level, label) in levels.into_iter().enumerate() {
-                    let node_type = if level == last_level_idx {
-                        NodeType::Taxon
-                    } else {
-                        NodeType::Inner
-                    };
-                    match &current_node.get_last_child_label() {
-                        Some(name) => {
-                            if name.as_str() != label {
-                                current_node.add_child(Node::new(
-                                    label.to_string(),
-                                    confidence_idx,
-                                    node_type,
-                                ));
-                            }
-                            current_node.confidence_range.1 = confidence_idx + 1;
-                        }
-                        None => {
-                            current_node.add_child(Node::new(
-                                label.to_string(),
-                                confidence_idx,
-                                node_type,
-                            ));
-                            current_node.confidence_range.1 = confidence_idx + 1;
-                        }
-                    };
-                    if level == last_level_idx {
-                        confidence_idx += 1;
-                    }
-                    current_node = current_node.children.last_mut().unwrap();
-                }
-                current_node.add_child(Node::new(
-                    current_node.label.clone(),
-                    confidence_idx - 1,
-                    NodeType::Sequence,
-                ));
-                current_node.confidence_range.1 = confidence_idx;
-
+                confidence_idx += 1;
+        //         let levels = lineage.split(',').collect_vec();
+        //         let last_level_idx = levels.len() - 1;
+        //         let mut current_node = &mut root;
+        //         for (level, label) in levels.into_iter().enumerate() {
+        //             let node_type = if level == last_level_idx {
+        //                 NodeType::Taxon
+        //             } else {
+        //                 NodeType::Inner
+        //             };
+        //             match &current_node.get_last_child_label() {
+        //                 Some(name) => {
+        //                     if name.as_str() != label {
+        //                         current_node.add_child(Node::new(
+        //                             label.to_string(),
+        //                             confidence_idx,
+        //                             node_type,
+        //                         ));
+        //                     }
+        //                     current_node.confidence_range.1 = confidence_idx + 1;
+        //                 }
+        //                 None => {
+        //                     current_node.add_child(Node::new(
+        //                         label.to_string(),
+        //                         confidence_idx,
+        //                         node_type,
+        //                     ));
+        //                     current_node.confidence_range.1 = confidence_idx + 1;
+        //                 }
+        //             };
+        //             if level == last_level_idx {
+        //                 confidence_idx += 1;
+        //             }
+        //             current_node = current_node.children.last_mut().unwrap();
+        //         }
+        //         current_node.add_child(Node::new(
+        //             current_node.label.clone(),
+        //             confidence_idx - 1,
+        //             NodeType::Sequence,
+        //         ));
+        //         current_node.confidence_range.1 = confidence_idx;
+        //
                 sequence_map.get_mut(sequence).unwrap().push(idx);
 
                 sequence.windows(8).for_each(|vals| {
@@ -102,7 +103,7 @@ impl Tree {
                 Ok(())
             })
             .collect::<Result<Vec<()>>>()?;
-        root.confidence_range.1 = confidence_idx;
+        // root.confidence_range.1 = confidence_idx;
         let (sorted_lineages, _): (Vec<String>, Vec<Vec<u8>>) =
             lineage_sequence_pairs.into_iter().unzip();
         Ok(Self {

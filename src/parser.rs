@@ -74,16 +74,16 @@ fn parse_reference_fasta_str(fasta_str: &str) -> Result<Tree> {
             .with_message("Parsing Reference...")
             .map(|line| -> Result<()> {
                 if let Some(label) = line.strip_prefix('>') {
-                    let lineage = regex
-                        .captures(label)
-                        .context(format!(
-                            "Unexpected taxonomical annotation detected in label {label}"
-                        ))?
-                        .get(1)
-                        .context(format!("No taxonomic string found in label {label}"))?
-                        .as_str()
-                        .to_owned();
-                    labels.push(lineage);
+                    // let lineage = regex
+                    //     .captures(label)
+                    //     .context(format!(
+                    //         "Unexpected taxonomical annotation detected in label {label}"
+                    //     ))?
+                    //     .get(1)
+                    //     .context(format!("No taxonomic string found in label {label}"))?
+                    //     .as_str()
+                    //     .to_owned();
+                    labels.push(label.to_string());
                     if !current_sequence.is_empty() {
                         sequences.push(current_sequence.clone());
                         current_sequence = Vec::new();
@@ -140,6 +140,7 @@ fn parse_query_fasta_str(fasta_str: &str) -> Result<Vec<(String, Vec<u8>)>> {
         }
     }
     queries.push(current_query);
+    queries.sort();
     Ok(queries)
 }
 
