@@ -14,6 +14,7 @@ pub fn raxtax<'a, 'b>(
     queries: &'b Vec<(String, Vec<u8>)>,
     tree: &'a Tree,
     skip_exact_matches: bool,
+    raw_confidence: bool,
     chunk_size: usize,
 ) -> Vec<Vec<lineage::EvaluationResult<'a, 'b>>> {
     let warnings = std::sync::Mutex::new(false);
@@ -65,17 +66,18 @@ pub fn raxtax<'a, 'b>(
                 drop(tmr);
                 let highest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len() as u16, num_trials, &intersect_buffer);
                 let eval_res = lineage::Lineage::new(query_label, tree, highest_hit_probs).evaluate();
-                // Special case: if there is exactly 1 exact match, confidence is set to 1.0
-                if let [idx] = exact_matches[..] {
-                    assert!(!eval_res.is_empty());
-                    let mut best_hit = eval_res[0].clone();
-                    best_hit.confidence_values[..tree.lineages[idx].chars().filter(|c| *c == ',').count()]
-                        .iter_mut()
-                        .for_each(|v| *v = 1.0);
-                    vec![best_hit]
-                } else {
-                    eval_res
+                assert!(!eval_res.is_empty());
+                if !raw_confidence {
+                    // Special case: if there is exactly 1 exact match, confidence is set to 1.0
+                    if let [idx] = exact_matches[..] {
+                        let mut best_hit = eval_res[0].clone();
+                        best_hit.confidence_values[..tree.lineages[idx].chars().filter(|c| *c == ',').count()]
+                            .iter_mut()
+                            .for_each(|v| *v = 1.0);
+                        return vec![best_hit];
+                    }
                 }
+                eval_res
             }).collect_vec()
         })
         .collect::<Vec<Vec<lineage::EvaluationResult<'a, 'b>>>>();

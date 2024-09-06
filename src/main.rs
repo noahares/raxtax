@@ -80,7 +80,13 @@ fn main() {
     } else {
         ((queries.len() / (n_threads * 10)) + 1).max(100)
     };
-    let result = raxtax(&queries, &tree, args.skip_exact_matches, chunk_size);
+    let result = raxtax(
+        &queries,
+        &tree,
+        args.skip_exact_matches,
+        args.raw_confidence,
+        chunk_size,
+    );
     if let Some(tsv_output) = tsv_output {
         let sequences: Vec<String> = utils::decompress_sequences(&queries);
         if let Err(e) = utils::output_results_tsv(&result, sequences, tsv_output) {
