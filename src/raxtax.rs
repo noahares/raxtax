@@ -69,7 +69,9 @@ pub fn raxtax<'a, 'b>(
                 if let [idx] = exact_matches[..] {
                     assert!(!eval_res.is_empty());
                     let mut best_hit = eval_res[0].clone();
-                    best_hit.confidence_values = tree.get_shared_exact_match(tree.lineages[idx].chars().filter(|c| *c == ',').count(), 1);
+                    best_hit.confidence_values[..tree.lineages[idx].chars().filter(|c| *c == ',').count()]
+                        .iter_mut()
+                        .for_each(|v| *v = 1.0);
                     vec![best_hit]
                 } else {
                     eval_res
