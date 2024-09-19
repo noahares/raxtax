@@ -31,7 +31,7 @@ pub struct Args {
     /// Create a binary database to load instead of a fasta file for repeated execution
     #[arg(long)]
     pub make_db: bool,
-    /// Don't treat exactly 1 exact match as a special case
+    /// Don't adjust confidence values for 1 exact match
     #[arg(long)]
     pub raw_confidence: bool,
     /// Number of threads

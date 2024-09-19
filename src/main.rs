@@ -98,4 +98,5 @@ fn main() {
         utils::report_error(e, "Failed to write results to file");
         exit(exitcode::IOERR);
     };
+    exit(exitcode::OK);
 }
