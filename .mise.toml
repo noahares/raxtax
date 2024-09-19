@@ -1,0 +1,3 @@
+[tools]
+python = {version='3.11', virtualenv='venv'}
+rust = '1.76'

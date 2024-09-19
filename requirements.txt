@@ -1,0 +1,7 @@
+Bio==1.7.1
+biopython==1.84
+matplotlib==3.9.2
+numpy==2.1.1
+pandas==2.2.2
+psutil==6.0.0
+scipy==1.14.1
