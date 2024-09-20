@@ -1,29 +1,7 @@
-import random
-from Bio import SeqIO
 import os
 import argparse
 import csv
 import common
-
-# Define a function to randomly sample sequences from a FASTA file
-def sample_fasta(input_fasta, num_samples, output_90, output_10):
-    sequences = list(SeqIO.parse(input_fasta, "fasta"))
-    sampled_sequences = random.sample(sequences, num_samples)
-
-    random.shuffle(sampled_sequences)
-    # Split the sampled sequences into 90% and 10%
-    split_point = int(0.9 * len(sampled_sequences))
-    # split_point = int(len(sampled_sequences) - 2000)
-    sample_90 = sampled_sequences[:split_point]
-    sample_10 = sampled_sequences[split_point:]
-
-    # Write the 90% set to a file
-    with open(output_90, "w") as out90:
-        SeqIO.write(sample_90, out90, "fasta")
-
-    # Write the 10% set to a file
-    with open(output_10, "w") as out10:
-        SeqIO.write(sample_10, out10, "fasta")
 
 # Define main function to handle different sample sizes
 def main(input_fasta, raxtax, sintax, sample_sizes, repetitions, output_dir):
@@ -42,7 +20,7 @@ def main(input_fasta, raxtax, sintax, sample_sizes, repetitions, output_dir):
             # sintax_dir = os.path.join(output_dir, f"sintax_{num_samples}_10pct_rep{i+1}")
 
             # Sample sequences and split into 90% and 10%
-            sample_fasta(input_fasta, num_samples, output_90, output_10)
+            common.sample_fasta(input_fasta, num_samples, output_90, output_10)
 
             # Run the external program on the 90% file and measure performance
             r_runtime, r_max_memory = common.build_raxtax_command(raxtax, output_10, output_90, raxtax_dir, 8)
