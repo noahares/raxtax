@@ -7,14 +7,14 @@ import psutil
 import csv
 
 # Define a function to randomly sample sequences from a FASTA file
-def sample_fasta(input_fasta, num_samples, output_90, output_10, fixed_query=False):
+def sample_fasta(input_fasta, num_samples, output_90, output_10, factr=1, fixed_query=False):
     sequences = list(SeqIO.parse(input_fasta, "fasta"))
     sampled_sequences = random.sample(sequences, num_samples)
 
     random.shuffle(sampled_sequences)
     # Split the sampled sequences into 90% and 10%
     if fixed_query:
-        split_point = int(len(sampled_sequences) - 2000)
+        split_point = int(len(sampled_sequences) - 2000 * factr)
     else:
         split_point = int(0.9 * len(sampled_sequences))
     sample_90 = sampled_sequences[:split_point]

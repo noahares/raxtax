@@ -4,7 +4,7 @@ import csv
 import common
 
 # Define main function to handle different sample sizes
-def main(input_fasta, raxtax, sintax, thread_counts, num_samples, repetitions, fixed_query, output_dir):
+def main(input_fasta, raxtax, sintax, thread_counts, num_samples, repetitions, weak_scaling, fixed_query, output_dir):
 
     csv_file = os.path.join(output_dir, "time_memory.csv")
     with open(csv_file, mode='w', newline='') as file:
@@ -18,7 +18,8 @@ def main(input_fasta, raxtax, sintax, thread_counts, num_samples, repetitions, f
             output_10 = os.path.join(output_dir, f"{num_threads}_10pct_rep{i+1}.fasta")
             raxtax_dir = os.path.join(output_dir, f"raxtax_{num_threads}_10pct_rep{i+1}")
             # sintax_dir = os.path.join(output_dir, f"sintax_{num_threads}_10pct_rep{i+1}")
-            common.sample_fasta(input_fasta, num_samples, output_90, output_10, fixed_query)
+            factr = num_threads if weak_scaling else 1
+            common.sample_fasta(input_fasta, num_samples, output_90, output_10, factr, fixed_query)
 
             # Run the external program on the 90% file and measure performance
             r_runtime, r_max_memory = common.build_raxtax_command(raxtax, output_10, output_90, raxtax_dir, num_threads)
@@ -38,6 +39,7 @@ if __name__ == "__main__":
     parser.add_argument("-r", dest="repetitions", type=int, default=3, help="Number of repetitions per sample size")
     parser.add_argument("-o", dest="output_dir", type=str, default="output_files", help="Directory to store output files")
     parser.add_argument("-f", dest="fixed_query", type=bool, default=False, help="If true, keep query size fixed at 2000")
+    parser.add_argument("-w", dest="weak_scaling", type=bool, default=False, help="If true, each thread adds 2000 queries")
 
     args = parser.parse_args()
 
@@ -46,4 +48,4 @@ if __name__ == "__main__":
         os.makedirs(args.output_dir)
 
     # Run the main function
-    main(args.input_fasta, args.raxtax, args.sintax, args.thread_counts, args.sample_size, args.repetitions, args.fixed_query, args.output_dir)
+    main(args.input_fasta, args.raxtax, args.sintax, args.thread_counts, args.sample_size, args.repetitions, args.weak_scaling, args.fixed_query, args.output_dir)
