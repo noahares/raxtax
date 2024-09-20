@@ -9,6 +9,7 @@ import csv
 # Define a function to randomly sample sequences from a FASTA file
 def sample_fasta(input_fasta, num_samples, output_90, output_10, factr=1, fixed_query=False):
     sequences = list(SeqIO.parse(input_fasta, "fasta"))
+    num_samples += 2000 * factr
     sampled_sequences = random.sample(sequences, num_samples)
 
     random.shuffle(sampled_sequences)
