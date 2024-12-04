@@ -3,6 +3,7 @@ name = "raxtax"
 version = "1.2.0"
 authors = ["Noah Wahl <noah.ares99@gmail.com>"]
 edition = "2021"
+repository = "https://github.com/noahares/raxtax"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -29,3 +30,12 @@ inherits = "release"
 codegen-units = 1
 lto = true
 panic = "abort"
+
+[profile.rel-perf]
+inherits = "release"
+debug = 1
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "ultra"
+lto = "thin"
