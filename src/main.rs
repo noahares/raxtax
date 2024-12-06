@@ -27,7 +27,18 @@ fn main() {
         .format_timestamp(None)
         .format_target(false)
         .init();
-    if let Err(e) = rayon::ThreadPoolBuilder::new()
+    if args.pin {
+        if let Err(e) = utils::setup_threadpool_pinned(args.threads) {
+            utils::report_error(e, "Failed to set up thread pinning! Continuing without");
+            if let Err(e) = rayon::ThreadPoolBuilder::new()
+                .num_threads(args.threads)
+                .build_global()
+            {
+                utils::report_error(anyhow::Error::from(e), "Failed to set up Multithreading");
+                exit(exitcode::OSERR);
+            }
+        };
+    } else if let Err(e) = rayon::ThreadPoolBuilder::new()
         .num_threads(args.threads)
         .build_global()
     {

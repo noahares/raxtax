@@ -8,6 +8,7 @@ use std::{
 use anyhow::{bail, Result};
 use flate2::read::GzDecoder;
 use itertools::Itertools;
+use log::warn;
 
 use crate::lineage;
 
@@ -152,6 +153,49 @@ pub fn report_error(e: anyhow::Error, message: impl std::fmt::Display) {
     log::error!("{}: {}", message, e);
     if log::log_enabled!(log::Level::Error) {
         eprintln!("{prefix} {message}: {e}");
+    }
+}
+
+pub fn setup_threadpool_pinned(num_threads: usize) -> Result<()> {
+    let cpus = get_thread_ids()?;
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(num_threads)
+        .start_handler(move |index| {
+            if let Some(core_id) = cpus.get(index) {
+                core_affinity::set_for_current(core_affinity::CoreId { id: *core_id });
+            }
+        })
+        .build_global()?;
+    Ok(())
+}
+
+pub fn get_thread_ids() -> Result<Vec<usize>> {
+    if cfg!(target_os = "linux") {
+        let mut used_physical = std::collections::HashSet::new();
+        let mut preferred_cpus = Vec::new();
+        let mut backup_cpus = Vec::new();
+        let total_num_cores = core_affinity::get_core_ids().unwrap().len();
+        for cpu in 0..total_num_cores {
+            let core_id_path = format!("/sys/devices/system/cpu/cpu{}/topology/core_id", cpu);
+            let physical_id = std::fs::read_to_string(core_id_path)?
+                .trim()
+                .parse::<usize>()?;
+
+            if used_physical.contains(&physical_id) {
+                backup_cpus.push(cpu);
+            } else {
+                preferred_cpus.push(cpu);
+                used_physical.insert(physical_id);
+            }
+        }
+
+        preferred_cpus.append(&mut backup_cpus);
+        Ok(preferred_cpus)
+    } else if let Some(available_cores) = core_affinity::get_core_ids() {
+        warn!("Thread-pinning used on non-linux system. Avoiding hyper-threading is not implemented for your platform!");
+        Ok(available_cores.into_iter().map(|c| c.id).collect_vec())
+    } else {
+        anyhow::bail!("Failed to get CPU information!")
     }
 }
 

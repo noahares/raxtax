@@ -44,6 +44,9 @@ pub struct Args {
     /// Force override of existing output files
     #[arg(long)]
     pub redo: bool,
+    /// Use thread pinning
+    #[arg(long)]
+    pub pin: bool,
     #[command(flatten)]
     pub verbosity: Verbosity<InfoLevel>,
 }
