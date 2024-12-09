@@ -172,22 +172,38 @@ pub fn setup_threadpool_pinned(num_threads: usize) -> Result<()> {
 pub fn get_thread_ids() -> Result<Vec<usize>> {
     if cfg!(target_os = "linux") {
         let mut used_physical = std::collections::HashSet::new();
+        let mut all_cpus = Vec::new();
         let mut preferred_cpus = Vec::new();
         let mut backup_cpus = Vec::new();
         let total_num_cores = core_affinity::get_core_ids().unwrap().len();
         for cpu in 0..total_num_cores {
             let core_id_path = format!("/sys/devices/system/cpu/cpu{}/topology/core_id", cpu);
-            let physical_id = std::fs::read_to_string(core_id_path)?
+            let socket_id_path = format!(
+                "/sys/devices/system/cpu/cpu{}/topology/physical_package_id",
+                cpu
+            );
+            let core_id = std::fs::read_to_string(core_id_path)?
+                .trim()
+                .parse::<usize>()?;
+            let socket_id = std::fs::read_to_string(socket_id_path)?
                 .trim()
                 .parse::<usize>()?;
 
-            if used_physical.contains(&physical_id) {
-                backup_cpus.push(cpu);
-            } else {
-                preferred_cpus.push(cpu);
-                used_physical.insert(physical_id);
-            }
+            all_cpus.push((socket_id, core_id, cpu));
         }
+        all_cpus.sort();
+
+        all_cpus
+            .into_iter()
+            .sorted()
+            .for_each(|(socket, core, cpu)| {
+                if used_physical.contains(&(core, socket)) {
+                    backup_cpus.push(cpu);
+                } else {
+                    preferred_cpus.push(cpu);
+                    used_physical.insert((core, socket));
+                }
+            });
 
         preferred_cpus.append(&mut backup_cpus);
         Ok(preferred_cpus)
