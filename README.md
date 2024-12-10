@@ -19,6 +19,7 @@ Options:
                                        If 0, uses all available threads [default: 0]
   -o, --prefix <PREFIX>                Output prefix
       --redo                           Force override of existing output files
+      --pin                            Use thread pinning
   -v, --verbose...                     Increase logging verbosity
   -q, --quiet...                       Decrease logging verbosity
   -h, --help                           Print help
@@ -31,8 +32,8 @@ Input files may be provided as gzip compressed archives.
 
 ### Input Database
 
-The input format for the database file is FASTA. 
-Sequence identifier should have the form `tax=<lineage>;`. 
+The input format for the database file is FASTA.
+Sequence identifier should have the form `tax=<lineage>;`.
 Everything after `tax=` is parsed as a comma-separated list of lineage nodes and is terminated by a semicolon.
 Lineages may have different depth, the only requirement is that they can be parsed into a multi-furcating tree.
 We use phylum to sequence for the examples in this README to aid readability.
@@ -102,6 +103,8 @@ However, if you experience problems due to hyper-threading, you might want to re
 
 `--redo` will enable overwriting of existing output files. **Use at your own risk!**
 
+`--tp` enables thread-pinning. On Linux, this will try to avoid hyper-threading and crossing sockets whenever possible. On other platforms, threads will still be pinned but in order of their IDs **which might affect performance negatively.**
+
 ## Important Implementation Details
 
 We suggest a threshold of 0.01 for confidence values to be considered (`F64_OUTPUT_ACCURACY` also in `src/utils.rs`).
@@ -118,5 +121,5 @@ We will soon publish a manuscript about this method and what we use it for.
 Edgar, Robert C. "SINTAX: a simple non-Bayesian taxonomy classifier for 16S and ITS sequences." biorxiv (2016): 074161.
 
 ## Copyright
- This work is licensed under CC BY-NC-SA 4.0. 
+ This work is licensed under CC BY-NC-SA 4.0.
  To view a copy of this license, visit https://creativecommons.org/licenses/by-nc-sa/4.0/
