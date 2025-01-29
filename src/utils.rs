@@ -203,12 +203,10 @@ pub fn get_thread_ids() -> Result<Vec<usize>> {
             .sorted()
             .for_each(|(core, socket, cpu)| {
                 if !used_physical.contains(&(core, socket)) {
-                    dbg!(format!("{} {} {}", core, socket, cpu));
                     preferred_cpus.push(cpu);
                     used_physical.insert((core, socket));
                 }
             });
-        dbg!(&preferred_cpus);
         Ok(preferred_cpus)
     } else if let Some(available_cores) = core_affinity::get_core_ids() {
         warn!("Thread-pinning used on non-linux system. Avoiding hyper-threading is not implemented for your platform!");
