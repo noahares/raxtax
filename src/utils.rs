@@ -8,7 +8,7 @@ use std::{
 use anyhow::{bail, Result};
 use flate2::read::GzDecoder;
 use itertools::Itertools;
-use log::warn;
+use log::{warn, log_enabled};
 
 use crate::lineage;
 
@@ -63,13 +63,16 @@ pub fn output_results(
     results: &[Vec<lineage::EvaluationResult<'_, '_>>],
     mut output: Box<dyn Write>,
 ) -> Result<()> {
-    let output_lines = results.iter().flat_map(|eval_results| {
-        eval_results
-            .iter()
-            .map(lineage::EvaluationResult::get_output_string)
-            .collect_vec()
-    });
-    writeln!(output, "{}", output_lines.into_iter().join("\n"))?;
+    let output_lines = results
+        .iter()
+        .flat_map(|eval_results| {
+            eval_results
+                .iter()
+                .map(lineage::EvaluationResult::get_output_string)
+                .collect_vec()
+        })
+        .join("\n");
+    writeln!(output, "{}", output_lines)?;
     Ok(())
 }
 
@@ -158,12 +161,17 @@ pub fn report_error(e: anyhow::Error, message: impl std::fmt::Display) {
 
 pub fn setup_threadpool_pinned(num_threads: usize) -> Result<()> {
     let cpus = get_thread_ids()?;
+    if cpus.len() < num_threads {
+        warn!("Only at most {} physical cores are available!", cpus.len());
+        if log_enabled!(log::Level::Warn) {
+            eprintln!("\x1b[33m[WARN ]\x1b[0m Only at most {} physical cores are available!", cpus.len());
+        }
+    };
+    let max_num_threads = num_threads.min(cpus.len());
     rayon::ThreadPoolBuilder::new()
-        .num_threads(num_threads)
+        .num_threads(max_num_threads)
         .start_handler(move |index| {
-            if let Some(core_id) = cpus.get(index) {
-                core_affinity::set_for_current(core_affinity::CoreId { id: *core_id });
-            }
+            core_affinity::set_for_current(core_affinity::CoreId { id: cpus[index] });
         })
         .build_global()?;
     Ok(())
@@ -174,7 +182,6 @@ pub fn get_thread_ids() -> Result<Vec<usize>> {
         let mut used_physical = std::collections::HashSet::new();
         let mut all_cpus = Vec::new();
         let mut preferred_cpus = Vec::new();
-        let mut backup_cpus = Vec::new();
         let total_num_cores = core_affinity::get_core_ids().unwrap().len();
         for cpu in 0..total_num_cores {
             let core_id_path = format!("/sys/devices/system/cpu/cpu{}/topology/core_id", cpu);
@@ -189,23 +196,19 @@ pub fn get_thread_ids() -> Result<Vec<usize>> {
                 .trim()
                 .parse::<usize>()?;
 
-            all_cpus.push((socket_id, core_id, cpu));
+            all_cpus.push((core_id, socket_id, cpu));
         }
-        all_cpus.sort();
-
         all_cpus
             .into_iter()
             .sorted()
-            .for_each(|(socket, core, cpu)| {
-                if used_physical.contains(&(core, socket)) {
-                    backup_cpus.push(cpu);
-                } else {
+            .for_each(|(core, socket, cpu)| {
+                if !used_physical.contains(&(core, socket)) {
+                    dbg!(format!("{} {} {}", core, socket, cpu));
                     preferred_cpus.push(cpu);
                     used_physical.insert((core, socket));
                 }
             });
-
-        preferred_cpus.append(&mut backup_cpus);
+        dbg!(&preferred_cpus);
         Ok(preferred_cpus)
     } else if let Some(available_cores) = core_affinity::get_core_ids() {
         warn!("Thread-pinning used on non-linux system. Avoiding hyper-threading is not implemented for your platform!");
