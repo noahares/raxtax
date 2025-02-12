@@ -19,8 +19,8 @@ use crate::utils::map_four_to_two_bit_repr;
 pub struct Tree {
     pub root: Node,
     pub lineages: Vec<String>,
-    pub sequences: HashMap<Vec<u8>, Vec<usize>>,
-    pub k_mer_map: Vec<Vec<usize>>,
+    pub sequences: HashMap<Vec<u8>, Vec<u32>>,
+    pub k_mer_map: Vec<Vec<u32>>,
     pub num_tips: usize,
 }
 
@@ -28,9 +28,9 @@ impl Tree {
     #[time("debug", "Tree::{}")]
     pub fn new(lineages: Vec<String>, sequences: Vec<Vec<u8>>) -> Result<Self> {
         let mut root = Node::new(String::from("root"), 0, NodeType::Inner);
-        let mut sequence_map: HashMap<Vec<u8>, Vec<usize>> =
+        let mut sequence_map: HashMap<Vec<u8>, Vec<u32>> =
             sequences.iter().map(|s| (s.clone(), Vec::new())).collect();
-        let mut k_mer_map: Vec<Vec<usize>> = vec![Vec::new(); 2 << 15];
+        let mut k_mer_map: Vec<Vec<u32>> = vec![Vec::new(); 2 << 15];
         let mut lineage_sequence_pairs = lineages.into_iter().zip_eq(sequences).collect_vec();
         lineage_sequence_pairs.sort_by(|(l1, _), (l2, _)| l1.cmp(l2));
         let mut confidence_idx = 0_usize;
@@ -87,7 +87,7 @@ impl Tree {
                 ));
                 current_node.confidence_range.1 = confidence_idx;
 
-                sequence_map.get_mut(sequence).unwrap().push(idx);
+                sequence_map.get_mut(sequence).unwrap().push(idx as u32);
 
                 sequence.windows(8).for_each(|vals| {
                     if let Some(k_mer) = vals
@@ -96,7 +96,7 @@ impl Tree {
                         .map(|(j, v)| map_four_to_two_bit_repr(*v).map(|c| c << (14 - j * 2)))
                         .fold_options(0_u16, |acc, c| acc | c)
                     {
-                        k_mer_map[k_mer as usize].push(idx);
+                        k_mer_map[k_mer as usize].push(idx as u32);
                     }
                 });
                 Ok(())

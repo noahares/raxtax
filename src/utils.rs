@@ -8,7 +8,7 @@ use std::{
 use anyhow::{bail, Result};
 use flate2::read::GzDecoder;
 use itertools::Itertools;
-use log::{warn, log_enabled};
+use log::{log_enabled, warn};
 
 use crate::lineage;
 
@@ -164,7 +164,10 @@ pub fn setup_threadpool_pinned(num_threads: usize) -> Result<()> {
     if cpus.len() < num_threads {
         warn!("Only at most {} physical cores are available!", cpus.len());
         if log_enabled!(log::Level::Warn) {
-            eprintln!("\x1b[33m[WARN ]\x1b[0m Only at most {} physical cores are available!", cpus.len());
+            eprintln!(
+                "\x1b[33m[WARN ]\x1b[0m Only at most {} physical cores are available!",
+                cpus.len()
+            );
         }
     };
     let max_num_threads = num_threads.min(cpus.len());

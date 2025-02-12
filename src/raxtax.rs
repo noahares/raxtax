@@ -41,9 +41,9 @@ pub fn raxtax<'a, 'b>(
                     // check for inconsistencies for exact matches
                     let mut mtx = warnings.lock().unwrap();
                     for id in exact_matches {
-                        info!("Exact sequence match for query {query_label}: {}", tree.lineages[*id]);
+                        info!("Exact sequence match for query {query_label}: {}", tree.lineages[*id as usize]);
                     }
-                    if !exact_matches.iter().map(|&idx| tree.lineages[idx].rsplit_once(',').unwrap().0).all_equal() {
+                    if !exact_matches.iter().map(|&idx| tree.lineages[idx as usize].rsplit_once(',').unwrap().0).all_equal() {
                         warn!("Exact matches for {query_label} differ above the leafs of the lineage tree!");
                         *mtx = true;
                     }
@@ -56,12 +56,12 @@ pub fn raxtax<'a, 'b>(
                         tree.k_mer_map[*query_kmer as usize]
                             .iter()
                             .for_each(|sequence_id| {
-                                unsafe { *intersect_buffer.get_unchecked_mut(*sequence_id) += 1 };
+                                unsafe { *intersect_buffer.get_unchecked_mut(*sequence_id as usize) += 1 };
                             });
                     }
                 if skip_exact_matches {
                     // look for the next best match
-                    for &id in exact_matches { unsafe { *intersect_buffer.get_unchecked_mut(id) = 0 } }
+                    for &id in exact_matches { unsafe { *intersect_buffer.get_unchecked_mut(id as usize) = 0 } }
                 }
                 drop(tmr);
                 let highest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len() as u16, num_trials, &intersect_buffer);
@@ -71,7 +71,7 @@ pub fn raxtax<'a, 'b>(
                     // Special case: if there is exactly 1 exact match, confidence is set to 1.0
                     if let [idx] = exact_matches[..] {
                         let mut best_hit = eval_res[0].clone();
-                        best_hit.confidence_values[..tree.lineages[idx].chars().filter(|c| *c == ',').count()]
+                        best_hit.confidence_values[..tree.lineages[idx as usize].chars().filter(|c| *c == ',').count()]
                             .iter_mut()
                             .for_each(|v| *v = 1.0);
                         return vec![best_hit];
