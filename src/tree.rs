@@ -27,6 +27,11 @@ pub struct Tree {
 impl Tree {
     #[time("debug", "Tree::{}")]
     pub fn new(lineages: Vec<String>, sequences: Vec<Vec<u8>>) -> Result<Self> {
+        assert!(u32::try_from(lineages.len()).is_ok(),
+            "Hello Future!! Seems like we are finally having Billions of sequences in our databases. Neat!\n
+            This unfortunately breaks some stuff, but don't despair!\n
+            Just change u32 to usize for the data structures storing sequence indices in the Tree-struct and fix any casting errors.\n
+            P.S. If you bring this to my attention I will put you on a leaderboard or something!");
         let mut root = Node::new(String::from("root"), 0, NodeType::Inner);
         let mut sequence_map: HashMap<Vec<u8>, Vec<u32>> =
             sequences.iter().map(|s| (s.clone(), Vec::new())).collect();
