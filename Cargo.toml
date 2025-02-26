@@ -1,6 +1,6 @@
 [package]
 name = "raxtax"
-version = "1.2.1"
+version = "1.2.2"
 authors = ["Noah Wahl <noah.ares99@gmail.com>"]
 edition = "2021"
 repository = "https://github.com/noahares/raxtax"
