@@ -175,7 +175,7 @@ ATACGCTTTGCGT";
             tree.k_mer_map[0b1_0101_1111_1110_usize]
                 .iter()
                 .collect_vec(),
-            &[&0_usize]
+            &[&0]
         );
         assert_eq!(
             tree.k_mer_map[0b11_0001_1001_1111_usize]

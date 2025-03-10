@@ -1,4 +1,4 @@
-# RAxTax - RAxTax Accelerates Taxonomic Classification
+# `raxtax` - `raxtax` Accelerates Taxonomic Classification
 
 This project is heavily inspired by the SINTAX algorithm [[1]](#1).
 
@@ -57,7 +57,7 @@ ACTCGATAC
 
 ### Output
 
-RAxTax will produce 2 primary output files under the prefix specified with `-o` (defaults to `name_of_query_file.out/`).
+`raxtax` will produce 2 primary output files under the prefix specified with `-o` (defaults to `name_of_query_file.out/`).
 
 1. `<PREFIX>/raxtax.out` is the full result of the analysis. It contains for each query sequence a line for each database sequence where the confidence value is above 0.01 (confidence values are between 0 and 1).
 **If no database sequence fulfills this criterion, a single line containing the best match is printed**.
@@ -92,13 +92,13 @@ query1  Arthropoda  1.0 Insecta 1.0 Diptera 0.8 Muscidae    0.68    Musca   0.52
 
 ## Other Options
 
-`--skip-exact-matches` may be useful when running the database against itself to identify mislabeled sequences. Per default, RAxTax skips over exact sequences matches if there is **exactly one match** and outputs a confidence of 1.0 for the exact match.
+`--skip-exact-matches` may be useful when running the database against itself to identify mislabeled sequences. Per default, `raxtax` skips over exact sequences matches if there is **exactly one match** and outputs a confidence of 1.0 for the exact match.
 This option makes it so that any exact match is not considered for the analysis of a query sequence.
 
 `--make-db` can be used if you want to run the program with the same reference database for many different query files.
 If the reference database is large this will save significant time on repeat execution.
 
-`--threads` may be omited most of the time and RAxTax will use as many cores as your system has available. Because the analysis is _embarrassingly parallel_, this is a sensible default.
+`--threads` may be omitted most of the time and `raxtax` will use as many cores as your system has available. Because the analysis is _embarrassingly parallel_, this is a sensible default.
 However, if you experience problems due to hyper-threading, you might want to reduce the number of threads, to increase parallel efficiency.
 
 `--redo` will enable overwriting of existing output files. **Use at your own risk!**
@@ -115,6 +115,13 @@ If the database contains duplicate sequences that have different lineages above 
 ## Why does this exist if there are so many taxonomic classifiers already, and how does it work?
 
 We will soon publish a manuscript about this method and what we use it for.
+
+## Gigantic Databases
+
+Per default, `raxtax` uses 32-bit indices for indexing reference sequences.
+This makes things a lot faster, but trying to run it with more than $2^32$ (~4 Billion) reference sequences will fail.
+In this case, compile it with `--features huge_db` to use 64-bit indices (on 64-bit systems).
+An error message will be displayed if too many reference sequences are used with the 32-bit indices version.
 
 ## References
 <a id="1">[1]</a>

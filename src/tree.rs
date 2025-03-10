@@ -15,27 +15,40 @@ use serde::{Deserialize, Serialize};
 
 use crate::utils::map_four_to_two_bit_repr;
 
+#[cfg(feature = "huge_db")]
+type IndexType = usize;
+
+#[cfg(not(feature = "huge_db"))]
+type IndexType = u32;
+
+#[cfg(not(feature = "huge_db"))]
+fn check_lineage_size(db_size: usize) {
+        assert!(u32::try_from(db_size).is_ok(),
+            "Too many database sequences to run with 32-bit indices!\n
+            Re-compile raxtax with '--features huge_db' to enable usize indices.");
+}
+
+#[cfg(feature = "huge_db")]
+fn check_lineage_size() {
+}
+
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Tree {
     pub root: Node,
     pub lineages: Vec<String>,
-    pub sequences: HashMap<Vec<u8>, Vec<u32>>,
-    pub k_mer_map: Vec<Vec<u32>>,
+    pub sequences: HashMap<Vec<u8>, Vec<IndexType>>,
+    pub k_mer_map: Vec<Vec<IndexType>>,
     pub num_tips: usize,
 }
 
 impl Tree {
     #[time("debug", "Tree::{}")]
     pub fn new(lineages: Vec<String>, sequences: Vec<Vec<u8>>) -> Result<Self> {
-        assert!(u32::try_from(lineages.len()).is_ok(),
-            "Hello Future!! Seems like we are finally having Billions of sequences in our databases. Neat!\n
-            This unfortunately breaks some stuff, but don't despair!\n
-            Just change u32 to usize for the data structures storing sequence indices in the Tree-struct and fix any casting errors.\n
-            P.S. If you bring this to my attention I will put you on a leaderboard or something!");
+        check_lineage_size(lineages.len());
         let mut root = Node::new(String::from("root"), 0, NodeType::Inner);
-        let mut sequence_map: HashMap<Vec<u8>, Vec<u32>> =
+        let mut sequence_map: HashMap<Vec<u8>, Vec<IndexType>> =
             sequences.iter().map(|s| (s.clone(), Vec::new())).collect();
-        let mut k_mer_map: Vec<Vec<u32>> = vec![Vec::new(); 2 << 15];
+        let mut k_mer_map: Vec<Vec<IndexType>> = vec![Vec::new(); 2 << 15];
         let mut lineage_sequence_pairs = lineages.into_iter().zip_eq(sequences).collect_vec();
         lineage_sequence_pairs.sort_by(|(l1, _), (l2, _)| l1.cmp(l2));
         let mut confidence_idx = 0_usize;
@@ -92,7 +105,10 @@ impl Tree {
                 ));
                 current_node.confidence_range.1 = confidence_idx;
 
-                sequence_map.get_mut(sequence).unwrap().push(idx as u32);
+                sequence_map
+                    .get_mut(sequence)
+                    .unwrap()
+                    .push(idx as IndexType);
 
                 sequence.windows(8).for_each(|vals| {
                     if let Some(k_mer) = vals
@@ -101,7 +117,7 @@ impl Tree {
                         .map(|(j, v)| map_four_to_two_bit_repr(*v).map(|c| c << (14 - j * 2)))
                         .fold_options(0_u16, |acc, c| acc | c)
                     {
-                        k_mer_map[k_mer as usize].push(idx as u32);
+                        k_mer_map[k_mer as usize].push(idx as IndexType);
                     }
                 });
                 Ok(())
