@@ -119,7 +119,7 @@ We will soon publish a manuscript about this method and what we use it for.
 ## Gigantic Databases
 
 Per default, `raxtax` uses 32-bit indices for indexing reference sequences.
-This makes things a lot faster, but trying to run it with more than $2^32$ (~4 Billion) reference sequences will fail.
+This makes things a lot faster, but trying to run it with more than $2^{32}$ (~4 Billion) reference sequences will fail.
 In this case, compile it with `--features huge_db` to use 64-bit indices (on 64-bit systems).
 An error message will be displayed if too many reference sequences are used with the 32-bit indices version.
 
