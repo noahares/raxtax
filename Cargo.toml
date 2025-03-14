@@ -6,7 +6,7 @@ edition = "2021"
 repository = "https://github.com/noahares/raxtax"
 description = "k-mer-based non-Bayesian Taxonomic Classifier"
 readme = "README.md"
-license = "CC BY-NC-SA 4.0"
+license = "CC-BY-NC-SA-4.0"
 include = [
     "**/*.rs",
     "./Cargo.toml",
