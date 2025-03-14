@@ -4,12 +4,18 @@
 
 ## Installation
 
-Precompiled binaries are available from the [Github Release page](https://github.com/noahares/raxtax/releases/) for Linux, Windows and macOS.
+### Precompiled Binaries
 
-`raxtax` is also available from [crates.io](https://crates.io/crates/raxtax) to install via:
+Precompiled binaries are available from the [Github Release page](https://github.com/noahares/raxtax/releases/) for Linux, Windows and macOS (Intel and Apple Silicon).
+
+### [crates.io](https://crates.io/crates/raxtax)
+
+`raxtax` can be installed via:
 ```sh
 cargo install raxtax
 ```
+
+### Build From Source
 
 To install from source (with maximum performance):
 ```sh
@@ -39,13 +45,29 @@ Options:
   -V, --version                        Print version
 ```
 
-## Format
+### Simple Example
 
-Input files may be provided as gzip compressed archives.
+See [`example/`](https://github.com/noahares/raxtax/tree/main/example) for example data to run `raxrax`.
 
-### Input Database
+The files `example/diptera_references.fasta` and `example/diptera_queries.fasta` contain *Diptera* sequences for a quick example run of `raxtax`.
+**If you did not clone this repository to acquire the `raxtax` executable, you may have to download these files from GitHub (via cloning the repository or manual download).**
+
+From the project root (otherwise adjust the paths) run:
+```sh
+# with raxtax installed
+<path/to/raxtax> -d example/diptera_references.fasta -i example/diptera_queries.fasta -o example/example_run
+
+# from source
+cargo run --profile=ultra -- -d example/diptera_references.fasta -i example/diptera_queries.fasta -o example/example_run
+```
+
+This creates a new folder `example/example_run` with the taxonomic assignments and confidence values for each query in `raxtax.out` and various log messages (including exact sequence matches) in `raxtax.log`.
+
+### Input Database (`-d`)
 
 The input format for the database file is FASTA.
+It is possible to provide the file as a Gzip archive (`.gzip` or `.gz`).
+
 Sequence identifier should have the form `tax=<lineage>;`.
 Everything after `tax=` is parsed as a comma-separated list of lineage nodes and is terminated by a semicolon.
 Lineages may have different depth, the only requirement is that they can be parsed into a multi-furcating tree.
@@ -58,9 +80,9 @@ For example, an entry may look like this:
 ACTCGATAC
 ```
 
-### Input Query
+### Input Query (`-i`)
 
-The format for query sequences is also FASTA, but more relaxed than the database format:
+The format for query sequences is also FASTA (again, Gzip archives are supported), but more relaxed than the database format:
 
 ```sh
 # example sequence
@@ -68,7 +90,7 @@ The format for query sequences is also FASTA, but more relaxed than the database
 ACTCGATAC
 ```
 
-### Output
+### Output (`-o`)
 
 `raxtax` will produce 2 primary output files under the prefix specified with `-o` (defaults to `name_of_query_file.out/`).
 
@@ -103,7 +125,7 @@ In this file, the taxonomic lineage and confidence values are interleaved, and t
 query1  Arthropoda  1.0 Insecta 1.0 Diptera 0.8 Muscidae    0.68    Musca   0.52    Musca_domestica 0.31    0.67456 0.71234 ACTCGATAC
 ```
 
-## Other Options
+### Other Options
 
 `--skip-exact-matches` may be useful when running the database against itself to identify mislabeled sequences. Per default, `raxtax` skips over exact sequences matches if there is **exactly one match** and outputs a confidence of 1.0 for the exact match.
 This option makes it so that any exact match is not considered for the analysis of a query sequence.
@@ -128,7 +150,7 @@ If the database contains duplicate sequences that have different lineages above 
 ## Why does this exist if there are so many taxonomic classifiers already, and how does it work?
 
 This project is heavily inspired by the SINTAX algorithm [[1]](#1).
-We will soon publish a manuscript about this method and what we use it for.
+We will soon publish a manuscript about this method.
 
 ## Gigantic Databases
 
