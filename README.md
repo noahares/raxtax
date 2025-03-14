@@ -116,7 +116,7 @@ However, if you experience problems due to hyper-threading, you might want to re
 
 `--redo` will enable overwriting of existing output files. **Use at your own risk!**
 
-`--tp` enables thread-pinning. On Linux, this will try to avoid hyper-threading and crossing sockets whenever possible. On other platforms, threads will still be pinned but in order of their IDs **which might affect performance negatively.**
+`--pin` enables thread-pinning. On Linux, this will try to avoid hyper-threading and crossing sockets whenever possible. On other platforms, threads will still be pinned but in order of their IDs **which might affect performance negatively.**
 
 ## Important Implementation Details
 
