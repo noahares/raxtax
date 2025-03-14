@@ -1,10 +1,23 @@
-# `raxtax` - `raxtax` Accelerates Taxonomic Classification
+# RAxTax - `raxtax` Accelerates Taxonomic Classification
 
-This project is heavily inspired by the SINTAX algorithm [[1]](#1).
+`raxtax` is a fast and efficient k-mer-based non-Bayesian taxonomic classifier for barcoding DNA sequences.
+
+## Installation
+
+Precompiled binaries are available from the [Github Release page](https://github.com/noahares/raxtax/releases/) for Linux, Windows and macOS.
+
+`raxtax` is also available from [crates.io](https://crates.io/crates/raxtax) to install via:
+```sh
+cargo install raxtax
+```
+
+To install from source (with maximum performance):
+```sh
+git clone https://github.com/noahares/raxtax.git
+cargo build --profile=ultra
+```
 
 ## Usage
-
-For maximum performance, build the program with `cargo build --profile=ultra`.
 
 ```sh
 Usage: raxtax [OPTIONS] --database-path <DATABASE_PATH> --query-file <QUERY_FILE>
@@ -114,6 +127,7 @@ If the database contains duplicate sequences that have different lineages above 
 
 ## Why does this exist if there are so many taxonomic classifiers already, and how does it work?
 
+This project is heavily inspired by the SINTAX algorithm [[1]](#1).
 We will soon publish a manuscript about this method and what we use it for.
 
 ## Gigantic Databases
