@@ -1,9 +1,12 @@
 [package]
 name = "raxtax"
-version = "1.2.2"
+version = "1.2.3"
 authors = ["Noah Wahl <noah.ares99@gmail.com>"]
 edition = "2021"
 repository = "https://github.com/noahares/raxtax"
+description = "k-mer-based non-Bayesian Taxonomic Classifier"
+readme = "README.md"
+license = "CC BY-NC-SA 4.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
