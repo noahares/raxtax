@@ -1,6 +1,8 @@
 # RAxTax - `raxtax` Accelerates Taxonomic Classification
 
 `raxtax` is a fast and efficient k-mer-based non-Bayesian taxonomic classifier for barcoding DNA sequences.
+A preprint of our manuscript is available at [BioRxiv](https://www.biorxiv.org/content/10.1101/2025.03.11.642618v1).
+This project is heavily inspired by the SINTAX algorithm [[1]](#1).
 
 ## Installation
 
@@ -146,11 +148,6 @@ We suggest a threshold of 0.01 for confidence values to be considered (`F64_OUTP
 For technical reasons this is the number of digits after the decimal point, so currently this is 2.
 
 If the database contains duplicate sequences that have different lineages above the lowest taxonomic level a warning will be emitted.
-
-## Why does this exist if there are so many taxonomic classifiers already, and how does it work?
-
-This project is heavily inspired by the SINTAX algorithm [[1]](#1).
-We will soon publish a manuscript about this method.
 
 ## Gigantic Databases
 
