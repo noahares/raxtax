@@ -23,14 +23,15 @@ type IndexType = u32;
 
 #[cfg(not(feature = "huge_db"))]
 fn check_lineage_size(db_size: usize) {
-        assert!(u32::try_from(db_size).is_ok(),
-            "Too many database sequences to run with 32-bit indices!\n
-            Re-compile raxtax with '--features huge_db' to enable usize indices.");
+    assert!(
+        u32::try_from(db_size).is_ok(),
+        "Too many database sequences to run with 32-bit indices!\n
+            Re-compile raxtax with '--features huge_db' to enable usize indices."
+    );
 }
 
 #[cfg(feature = "huge_db")]
-fn check_lineage_size() {
-}
+fn check_lineage_size() {}
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Tree {

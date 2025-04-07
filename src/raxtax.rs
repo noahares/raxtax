@@ -70,11 +70,13 @@ pub fn raxtax<'a, 'b>(
                 if !raw_confidence && !skip_exact_matches {
                     // Special case: if there is exactly 1 exact match, confidence is set to 1.0
                     if let [idx] = exact_matches[..] {
-                        let mut best_hit = eval_res.iter().find(|res| *res.lineage == tree.lineages[idx as usize]).unwrap().clone();
-                        best_hit.confidence_values[..tree.lineages[idx as usize].chars().filter(|c| *c == ',').count() + 1]
-                            .iter_mut()
-                            .for_each(|v| *v = 1.0);
-                        return vec![best_hit];
+                        return vec![lineage::EvaluationResult {
+                            query_label,
+                            lineage: &tree.lineages[idx as usize],
+                            confidence_values: vec![1.0; tree.lineages[idx as usize].chars().filter(|c| *c == ',').count() + 1],
+                            local_signal: eval_res[0].local_signal,
+                            global_signal: eval_res[0].global_signal
+                        }];
                     }
                 }
                 eval_res
