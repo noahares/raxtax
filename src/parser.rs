@@ -1,3 +1,4 @@
+use ahash::HashSet;
 use anyhow::{bail, Context, Result};
 use indicatif::{ProgressIterator, ProgressStyle};
 use log::Level;
@@ -32,7 +33,7 @@ fn map_dna_char(ch: char) -> u8 {
     }
 }
 
-#[time("info")]
+#[time("info", "Parsing References")]
 pub fn parse_reference_fasta_file(sequence_path: &PathBuf) -> Result<(bool, Tree)> {
     if let Ok(tree) = Tree::load_from_file(sequence_path) {
         return Ok((false, tree));
@@ -103,14 +104,20 @@ fn parse_reference_fasta_str(fasta_str: &str) -> Result<Tree> {
     Tree::new(labels, sequences)
 }
 
-#[time("info")]
-pub fn parse_query_fasta_file(sequence_path: &PathBuf) -> Result<Vec<(String, Vec<u8>)>> {
+#[time("info", "Parsing Queries")]
+pub fn parse_query_fasta_file(
+    sequence_path: &PathBuf,
+    queries_to_skip: &HashSet<String>,
+) -> Result<Vec<(String, Vec<u8>)>> {
     let mut fasta_str = String::new();
     let _ = utils::get_reader(sequence_path)?.read_to_string(&mut fasta_str);
-    parse_query_fasta_str(&fasta_str)
+    parse_query_fasta_str(&fasta_str, queries_to_skip)
 }
 
-fn parse_query_fasta_str(fasta_str: &str) -> Result<Vec<(String, Vec<u8>)>> {
+fn parse_query_fasta_str(
+    fasta_str: &str,
+    queries_to_skip: &HashSet<String>,
+) -> Result<Vec<(String, Vec<u8>)>> {
     if fasta_str.is_empty() {
         bail!("File is empty")
     }
@@ -140,11 +147,16 @@ fn parse_query_fasta_str(fasta_str: &str) -> Result<Vec<(String, Vec<u8>)>> {
         }
     }
     queries.push(current_query);
-    Ok(queries)
+    Ok(queries
+        .into_iter()
+        .filter(|q| !queries_to_skip.contains(&q.0))
+        .collect())
 }
 
 #[cfg(test)]
 mod tests {
+    use ahash::{HashSet, HashSetExt};
+
     use itertools::Itertools;
 
     use crate::tree::Tree;
@@ -208,12 +220,12 @@ ATACGCTTTGCGT";
     fn test_query_parser() {
         let fasta_str = r">label1
 AAACCCTTTGGGA";
-        let (_, sequence) = &parse_query_fasta_str(fasta_str).unwrap()[0];
+        let (_, sequence) = &parse_query_fasta_str(fasta_str, &HashSet::new()).unwrap()[0];
         assert_eq!(sequence, &[1, 1, 1, 2, 2, 2, 8, 8, 8, 4, 4, 4, 1]);
 
         let fasta_str2 = r">label1
 ACGTWSMKRYBDHVN";
-        let (_, sequence) = &parse_query_fasta_str(fasta_str2).unwrap()[0];
+        let (_, sequence) = &parse_query_fasta_str(fasta_str2, &HashSet::new()).unwrap()[0];
         assert_eq!(
             sequence,
             &[1, 2, 4, 8, 9, 6, 3, 12, 5, 10, 14, 13, 11, 7, 15]

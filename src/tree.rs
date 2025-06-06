@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::{
     fs::File,
-    io::{Read, Write},
+    io::{BufWriter, Read},
     path::PathBuf,
 };
 
@@ -144,9 +144,9 @@ impl Tree {
     }
 
     #[time("debug")]
-    pub fn save_to_file(&self, mut output: Box<dyn Write>) -> Result<()> {
+    pub fn save_to_file(&self, mut output: BufWriter<File>) -> Result<()> {
         if log_enabled!(Level::Info) {
-            eprintln!("Writing database to file...");
+            eprintln!("[INFO ] Writing database to file...");
         }
         bincode::serialize_into(&mut output, &self)?;
         Ok(())
@@ -154,7 +154,7 @@ impl Tree {
 
     pub fn load_from_file(path: &PathBuf) -> Result<Self> {
         if log_enabled!(Level::Info) {
-            eprintln!("Trying to read from database file...");
+            eprintln!("[INFO ] Trying to read from database file...");
         }
         let mut file = File::open(path)?;
         let mut buffer = Vec::new();

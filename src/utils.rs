@@ -1,7 +1,7 @@
 use std::{
     collections::HashSet,
     fs::File,
-    io::{BufReader, Read, Write},
+    io::{BufReader, Read},
     path::PathBuf,
 };
 
@@ -59,11 +59,8 @@ pub fn get_reader(path: &PathBuf) -> Result<Box<dyn Read>> {
     }
 }
 
-pub fn output_results(
-    results: &[Vec<lineage::EvaluationResult<'_, '_>>],
-    mut output: Box<dyn Write>,
-) -> Result<()> {
-    let output_lines = results
+pub fn get_results(results: &[Vec<lineage::EvaluationResult<'_, '_>>]) -> String {
+    results
         .iter()
         .flat_map(|eval_results| {
             eval_results
@@ -71,9 +68,7 @@ pub fn output_results(
                 .map(lineage::EvaluationResult::get_output_string)
                 .collect_vec()
         })
-        .join("\n");
-    writeln!(output, "{}", output_lines)?;
-    Ok(())
+        .join("\n")
 }
 
 pub fn decompress_sequences(sequences: &[(String, Vec<u8>)]) -> Vec<String> {
@@ -93,11 +88,10 @@ pub fn decompress_sequences(sequences: &[(String, Vec<u8>)]) -> Vec<String> {
         .collect_vec()
 }
 
-pub fn output_results_tsv(
+pub fn get_results_tsv(
     results: &[Vec<lineage::EvaluationResult<'_, '_>>],
     sequences: Vec<String>,
-    mut output: Box<dyn Write>,
-) -> Result<()> {
+) -> Result<String> {
     let output_lines = results
         .iter()
         .zip_eq(sequences)
@@ -107,8 +101,7 @@ pub fn output_results_tsv(
                 .map(|er| er.get_tsv_string(&sequence))
                 .collect_vec()
         });
-    writeln!(output, "{}", output_lines.into_iter().join("\n"))?;
-    Ok(())
+    Ok(output_lines.into_iter().join("\n"))
 }
 
 pub fn euclidean_distance_l1(a: &[f64], b: &[f64]) -> f64 {

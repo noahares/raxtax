@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::time::Duration;
 
 use crate::lineage;
@@ -11,12 +12,14 @@ use rayon::prelude::*;
 
 #[time("info")]
 pub fn raxtax<'a, 'b>(
-    queries: &'b Vec<(String, Vec<u8>)>,
+    queries: &'b [(String, Vec<u8>)],
     tree: &'a Tree,
     skip_exact_matches: bool,
     raw_confidence: bool,
     chunk_size: usize,
-) -> Vec<Vec<lineage::EvaluationResult<'a, 'b>>> {
+    sender: &crossbeam::channel::Sender<(Vec<String>, String, Option<String>)>,
+    tsv: bool,
+) -> Result<()> {
     let warnings = std::sync::Mutex::new(false);
     let empty_vec = Vec::new();
     let pb = ProgressBar::new(queries.len() as u64)
@@ -29,11 +32,11 @@ pub fn raxtax<'a, 'b>(
         )
         .with_message("Running Queries...");
     pb.enable_steady_tick(Duration::from_millis(100));
-    let results = queries
+    queries
         .par_chunks(chunk_size)
-        .flat_map(|q| {
+        .map(|q| {
             let mut intersect_buffer: Vec<u16> = vec![0; tree.num_tips];
-            q.iter().map(|(query_label, query_sequence)| {
+            let results = q.iter().map(|(query_label, query_sequence)| {
                 pb.inc(1);
                 intersect_buffer.fill(0);
                 let exact_matches = tree.sequences.get(query_sequence).unwrap_or(&empty_vec);
@@ -80,12 +83,17 @@ pub fn raxtax<'a, 'b>(
                     }
                 }
                 eval_res
-            }).collect_vec()
-        })
-        .collect::<Vec<Vec<lineage::EvaluationResult<'a, 'b>>>>();
+            }).collect::<Vec<Vec<lineage::EvaluationResult<'a, 'b>>>>();
+            let primary_results = utils::get_results(&results);
+            let processed_queries = q.iter().map(|(query_label, _)| query_label.clone()).collect_vec();
+            let tsv_results = if tsv { Some(utils::get_results_tsv(&results, utils::decompress_sequences(q))?) } else { None };
+            sender.send((processed_queries, primary_results, tsv_results))?;
+            Ok(())
+
+            }).collect::<Result<Vec<()>>>()?;
 
     if *warnings.lock().unwrap() && log_enabled!(Level::Warn) {
         eprintln!("\x1b[33m[WARN ]\x1b[0m Exact matches for some queries differ above the species level! Check the log file for more information!");
     }
-    results
+    Ok(())
 }
