@@ -35,10 +35,12 @@ Options:
   -i, --query-file <QUERY_FILE>        Path to the query file
       --skip-exact-matches             If used for mislabling analysis, you want to skip exact sequence matches
       --tsv                            Output primary result file in tsv format
-      --make-db                        Create a binary database to load instead of a fasta file for repeated execution
+      --only-db                        Create binary database and exit
+      --skip-db                        Don't create the binary database for the reference sequences
+      --raw-confidence                 Don't adjust confidence values for 1 exact match
   -t, --threads <THREADS>              Number of threads
                                        If 0, uses all available threads [default: 0]
-  -o, --prefix <PREFIX>                Output prefix
+  -o, --prefix <PREFIX>                Output prefix [default: raxtax]
       --redo                           Force override of existing output files
       --pin                            Use thread pinning
   -v, --verbose...                     Increase logging verbosity
@@ -94,7 +96,7 @@ ACTCGATAC
 
 ### Output (`-o`)
 
-`raxtax` will produce 2 primary output files under the prefix specified with `-o` (defaults to `name_of_query_file.out/`).
+`raxtax` will produce 2 primary output files under the prefix specified with `-o` (defaults to `raxtax/`).
 
 1. `<PREFIX>/raxtax.out` is the full result of the analysis. It contains for each query sequence a line for each database sequence where the confidence value is above 0.01 (confidence values are between 0 and 1).
 **If no database sequence fulfills this criterion, a single line containing the best match is printed**.
@@ -132,8 +134,15 @@ query1  Arthropoda  1.0 Insecta 1.0 Diptera 0.8 Muscidae    0.68    Musca   0.52
 `--skip-exact-matches` may be useful when running the database against itself to identify mislabeled sequences. Per default, `raxtax` skips over exact sequences matches if there is **exactly one match** and outputs a confidence of 1.0 for the exact match.
 This option makes it so that any exact match is not considered for the analysis of a query sequence.
 
-`--make-db` can be used if you want to run the program with the same reference database for many different query files.
+`--only-db` can be used if you just want to create a binary database for the reference sequences and then run `raxtax` for many different query files.
 If the reference database is large this will save significant time on repeat execution.
+This option does not require `-i` to be specified and `raxtax` will terminate after creating the binary database.
+
+`--skip-db` will skip the creation of the binary database.
+This is only recommended if you run with that database only once or it is very small.
+
+`--raw-confidence` will output the real confidence values if there is 1 exact match instead of setting the confidence to 1.0. 
+This is mostly a debugging option, but might come in handy for specific usecases.
 
 `--threads` may be omitted most of the time and `raxtax` will use as many cores as your system has available. Because the analysis is _embarrassingly parallel_, this is a sensible default.
 However, if you experience problems due to hyper-threading, you might want to reduce the number of threads, to increase parallel efficiency.
@@ -155,6 +164,18 @@ Per default, `raxtax` uses 32-bit indices for indexing reference sequences.
 This makes things a lot faster, but trying to run it with more than $2^{32}$ (~4 Billion) reference sequences will fail.
 In this case, compile it with `--features huge_db` to use 64-bit indices (on 64-bit systems).
 An error message will be displayed if too many reference sequences are used with the 32-bit indices version.
+
+## Checkpointing
+
+Since v.1.3.0 `raxtax` comes with default checkpointing to prevent data loss in case of unforeseen crashes (i.e. terminated by the OS scheduler). `raxtax` will create a binary database of the reference sequences in the output directory for faster loading on subsequent runs (disable this with `--skip-db`). Then, every time a batch of queries finishes, they will be written to the output files. 
+To restart from the latest checkpoint, run `raxtax` with the same options for `--raw_confidence <bool> --skip_exact_matches <bool> --tsv <bool> --prefix <path>`.
+The database path will be recovered from the checkpoint file.
+The log file and result files will be appended to in subsequent runs.
+
+**Caution**: Running with `--redo` will override any checkpoints!
+
+**Advanced usage**: Checkpoint information is saved in `<prefix>/raxtax.ckp` in JSON format and therefore can be manually adjusted to make the checkpoint cooperate if e.g. the database file was moved or some queries need to be re-run.
+**Do this at your own risk!**
 
 ## References
 <a id="1">[1]</a>
