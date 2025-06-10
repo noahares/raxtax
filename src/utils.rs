@@ -255,7 +255,7 @@ mod tests {
         assert_equal(map_four_to_two_bit_repr(2), Some(1));
         assert_equal(map_four_to_two_bit_repr(4), Some(2));
         assert_equal(map_four_to_two_bit_repr(8), Some(3));
-        assert_equal(map_four_to_two_bit_repr(10), None);
+        assert!(map_four_to_two_bit_repr(10).is_none());
     }
 
     #[test]
