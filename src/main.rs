@@ -157,5 +157,14 @@ fn main() {
         exit(exitcode::TEMPFAIL);
     }
 
+    if args.clean {
+        checkpoint.cleanup().unwrap_or_else(|e| {
+            utils::report_error(
+                e,
+                "Removing checkpoint files failed! Please delete them manually.",
+            )
+        });
+    }
+
     exit(exitcode::OK);
 }

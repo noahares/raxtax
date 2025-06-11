@@ -3,7 +3,8 @@ use anyhow::{bail, Result};
 use clap::Parser;
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use itertools::Itertools;
-use log::{info, Level};
+use log::{info, log_enabled, Level};
+use logging_timer::time;
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{File, OpenOptions},
@@ -76,7 +77,14 @@ impl Checkpoint {
         Ok(())
     }
 
-    pub fn save_progress(&self) -> Result<()> {
+    #[time("info", "Checkpoint Cleanup")]
+    pub fn cleanup(&self) -> Result<()> {
+        if log_enabled!(Level::Info) {
+            eprintln!("[INFO ] Removing checkpoint files...");
+        }
+        std::fs::remove_file(&self.checkpoint_file)?;
+        std::fs::remove_file(&self.progress_file)?;
+        std::fs::remove_file(&self.db_fingerprint.path)?;
         Ok(())
     }
 }
@@ -102,6 +110,9 @@ pub struct Args {
     /// Don't create the binary database for the reference sequences
     #[arg(long)]
     pub skip_db: bool,
+    /// Remove binary database and checkpoint files after a successful run
+    #[arg(short, long)]
+    pub clean: bool,
     /// Don't adjust confidence values for 1 exact match
     #[arg(long)]
     pub raw_confidence: bool,
