@@ -37,6 +37,7 @@ Options:
       --tsv                            Output primary result file in tsv format
       --only-db                        Create binary database and exit
       --skip-db                        Don't create the binary database for the reference sequences
+  -c, --clean                          Remove binary database and checkpoint files after a successful run
       --raw-confidence                 Don't adjust confidence values for 1 exact match
   -t, --threads <THREADS>              Number of threads
                                        If 0, uses all available threads [default: 0]
@@ -141,7 +142,9 @@ This option does not require `-i` to be specified and `raxtax` will terminate af
 `--skip-db` will skip the creation of the binary database.
 This is only recommended if you run with that database only once or it is very small.
 
-`--raw-confidence` will output the real confidence values if there is 1 exact match instead of setting the confidence to 1.0. 
+`--clean` will remove the binary database and checkpoint files (`raxtax.json` and `raxtax.ckp`) after a successful run. This is mainly intended for long runs that might get interrupted, but the binary database is not needed afterwards.
+
+`--raw-confidence` will output the real confidence values if there is 1 exact match instead of setting the confidence to 1.0.
 This is mostly a debugging option, but might come in handy for specific usecases.
 
 `--threads` may be omitted most of the time and `raxtax` will use as many cores as your system has available. Because the analysis is _embarrassingly parallel_, this is a sensible default.
@@ -167,14 +170,15 @@ An error message will be displayed if too many reference sequences are used with
 
 ## Checkpointing
 
-Since v.1.3.0 `raxtax` comes with default checkpointing to prevent data loss in case of unforeseen crashes (i.e. terminated by the OS scheduler). `raxtax` will create a binary database of the reference sequences in the output directory for faster loading on subsequent runs (disable this with `--skip-db`). Then, every time a batch of queries finishes, they will be written to the output files. 
+Since v.1.3.0 `raxtax` comes with default checkpointing to prevent data loss in case of unforeseen crashes (i.e. terminated by the OS scheduler). `raxtax` will create a binary database of the reference sequences in the output directory for faster loading on subsequent runs (disable this with `--skip-db`). Then, every time a query finishes, it will be written to the output files.
 To restart from the latest checkpoint, run `raxtax` with the same options for `--raw_confidence <bool> --skip_exact_matches <bool> --tsv <bool> --prefix <path>`.
 The database path will be recovered from the checkpoint file.
 The log file and result files will be appended to in subsequent runs.
 
 **Caution**: Running with `--redo` will override any checkpoints!
 
-**Advanced usage**: Checkpoint information is saved in `<prefix>/raxtax.ckp` in JSON format and therefore can be manually adjusted to make the checkpoint cooperate if e.g. the database file was moved or some queries need to be re-run.
+**Advanced usage**: Checkpoint information is saved in `<prefix>/raxtax.json` in JSON format and therefore can be manually adjusted to make the checkpoint cooperate if e.g. the database file was moved.
+The list of already processed queries is kept in `<prefix>/raxtax.ckp` and can be adjusted if some queries need to be re-run.
 **Do this at your own risk!**
 
 ## References
