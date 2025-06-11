@@ -2,20 +2,22 @@ use ahash::{HashSet, HashSetExt};
 use anyhow::{bail, Result};
 use clap::Parser;
 use clap_verbosity_flag::{InfoLevel, Verbosity};
+use itertools::Itertools;
 use log::{info, Level};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{File, OpenOptions},
-    io::{BufWriter, Write},
+    io::{BufRead, BufReader, BufWriter, Write},
     path::{Path, PathBuf},
 };
 
 use crate::utils;
 
 pub struct OutputWriters {
-    pub primary: BufWriter<File>,
-    pub tsv: Option<BufWriter<File>>,
+    pub primary: File,
+    pub tsv: Option<File>,
     pub log: Box<dyn Write + Send>,
+    pub progress: File,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq)]
@@ -44,10 +46,12 @@ impl FileFingerprint {
 #[derive(Serialize, Deserialize)]
 pub struct Checkpoint {
     pub checkpoint_file: PathBuf,
+    pub progress_file: PathBuf,
     pub db_fingerprint: FileFingerprint,
     raw_confidence: bool,
     skip_exact_matches: bool,
     tsv: bool,
+    #[serde(skip)]
     pub processed_queries: HashSet<String>,
 }
 
@@ -55,6 +59,7 @@ impl Checkpoint {
     pub fn new(own_path: &Path, args: &Args) -> Result<Checkpoint> {
         Ok(Checkpoint {
             checkpoint_file: std::path::absolute(own_path)?,
+            progress_file: std::path::absolute(own_path.with_extension("ckp"))?,
             db_fingerprint: FileFingerprint::new(&args.database_path)?,
             raw_confidence: args.raw_confidence,
             skip_exact_matches: args.skip_exact_matches,
@@ -64,10 +69,14 @@ impl Checkpoint {
     }
 
     pub fn save(&self) -> Result<()> {
-        let tmp_ckp_path = self.checkpoint_file.with_extension("ckp.tmp");
+        let tmp_ckp_path = self.checkpoint_file.with_extension("json.tmp");
         let tmp_ckp_file = std::fs::File::create(&tmp_ckp_path)?;
         serde_json::to_writer_pretty(tmp_ckp_file, self)?;
         std::fs::rename(tmp_ckp_path, &self.checkpoint_file)?;
+        Ok(())
+    }
+
+    pub fn save_progress(&self) -> Result<()> {
         Ok(())
     }
 }
@@ -113,32 +122,68 @@ pub struct Args {
     pub verbosity: Verbosity<InfoLevel>,
 }
 
-fn create_file(path: PathBuf, append: bool) -> std::io::Result<BufWriter<File>> {
+fn check_incomplete_output(path: &PathBuf, processed_queries: &HashSet<String>) -> Result<()> {
+    let reader = BufReader::new(File::open(path)?);
+    let mut needs_rewrite = false;
+    let retained_lines = reader
+        .lines()
+        .map_while(Result::ok)
+        .filter(|line| {
+            line.split_once("\t")
+                .map(|(query, _)| {
+                    if processed_queries.contains(query) {
+                        true
+                    } else {
+                        needs_rewrite = true;
+                        false
+                    }
+                })
+                .unwrap_or(false)
+        })
+        .collect_vec();
+
+    dbg!(&retained_lines.len());
+
+    if needs_rewrite {
+        let tmp_path = path.with_extension("tmp");
+        let mut tmp_file = File::create(&tmp_path)?;
+
+        writeln!(tmp_file, "{}", retained_lines.join("\n"))?;
+
+        std::fs::rename(tmp_path, path)?;
+    }
+    Ok(())
+}
+
+fn create_file(path: PathBuf, append: bool) -> std::io::Result<File> {
     if append {
-        OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(path)
-            .map(BufWriter::new)
+        OpenOptions::new().append(true).create(true).open(path)
     } else {
         OpenOptions::new()
             .write(true)
             .truncate(true)
             .create(true)
             .open(path)
-            .map(BufWriter::new)
     }
 }
 
 impl Args {
     pub fn get_output(&self) -> Result<(OutputWriters, Checkpoint)> {
         let prefix = self.get_prefix();
-        let ckp_path = prefix.join("raxtax.ckp");
+        let ckp_path = prefix.join("raxtax.json");
+        let out_path = prefix.join("raxtax.out");
+        let tsv_path = prefix.join("raxtax.tsv");
         let checkpoint = if !self.redo && ckp_path.is_file() {
             let ckp_file = std::fs::File::open(&ckp_path)?;
             match serde_json::from_reader(ckp_file) {
-                Ok(ckp) => {
+                Ok(mut ckp) => {
                     if self.checkpoint_valid(&ckp) {
+                        let progress = BufReader::new(File::open(&ckp.progress_file)?);
+                        ckp.processed_queries = progress.lines().map_while(Result::ok).collect();
+                        check_incomplete_output(&out_path, &ckp.processed_queries)?;
+                        if self.tsv {
+                            check_incomplete_output(&tsv_path, &ckp.processed_queries)?;
+                        }
                         ckp
                     } else {
                         Checkpoint::new(&ckp_path, self)?
@@ -157,7 +202,7 @@ impl Args {
         }
         std::fs::create_dir_all(&prefix)?;
         let tsv_output = if self.tsv {
-            Some(create_file(prefix.join("raxtax.tsv"), !self.redo)?)
+            Some(create_file(tsv_path, !self.redo)?)
         } else {
             None
         };
@@ -177,9 +222,10 @@ impl Args {
         }
         Ok((
             OutputWriters {
-                primary: create_file(prefix.join("raxtax.out"), !self.redo)?,
+                primary: create_file(out_path, !self.redo)?,
                 tsv: tsv_output,
                 log: log_output,
+                progress: create_file(prefix.join("raxtax.ckp"), !self.redo)?,
             },
             checkpoint,
         ))

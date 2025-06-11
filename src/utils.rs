@@ -59,49 +59,33 @@ pub fn get_reader(path: &PathBuf) -> Result<Box<dyn Read>> {
     }
 }
 
-pub fn get_results(results: &[Vec<lineage::EvaluationResult<'_, '_>>]) -> String {
+pub fn get_results(results: &[lineage::EvaluationResult<'_, '_>]) -> String {
     results
         .iter()
-        .flat_map(|eval_results| {
-            eval_results
-                .iter()
-                .map(lineage::EvaluationResult::get_output_string)
-                .collect_vec()
-        })
+        .map(lineage::EvaluationResult::get_output_string)
+        .collect_vec()
         .join("\n")
 }
 
-pub fn decompress_sequences(sequences: &[(String, Vec<u8>)]) -> Vec<String> {
-    sequences
+pub fn decompress_sequence(sequence: &[u8]) -> String {
+    sequence
         .iter()
-        .map(|(_, s)| {
-            s.iter()
-                .map(|c| match c {
-                    0b0001 => 'A',
-                    0b0010 => 'C',
-                    0b0100 => 'G',
-                    0b1000 => 'T',
-                    _ => '-',
-                })
-                .join("")
+        .map(|c| match c {
+            0b0001 => 'A',
+            0b0010 => 'C',
+            0b0100 => 'G',
+            0b1000 => 'T',
+            _ => '-',
         })
-        .collect_vec()
+        .join("")
 }
 
-pub fn get_results_tsv(
-    results: &[Vec<lineage::EvaluationResult<'_, '_>>],
-    sequences: Vec<String>,
-) -> Result<String> {
-    let output_lines = results
+pub fn get_results_tsv(results: &[lineage::EvaluationResult<'_, '_>], sequence: String) -> String {
+    results
         .iter()
-        .zip_eq(sequences)
-        .flat_map(|(eval_results, sequence)| {
-            eval_results
-                .iter()
-                .map(|er| er.get_tsv_string(&sequence))
-                .collect_vec()
-        });
-    Ok(output_lines.into_iter().join("\n"))
+        .map(|er| er.get_tsv_string(&sequence))
+        .collect_vec()
+        .join("\n")
 }
 
 pub fn euclidean_distance_l1(a: &[f64], b: &[f64]) -> f64 {

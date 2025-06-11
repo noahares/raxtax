@@ -17,7 +17,7 @@ pub fn raxtax<'a, 'b>(
     skip_exact_matches: bool,
     raw_confidence: bool,
     chunk_size: usize,
-    sender: &crossbeam::channel::Sender<(Vec<String>, String, Option<String>)>,
+    sender: &crossbeam::channel::Sender<(String, String, Option<String>)>,
     tsv: bool,
 ) -> Result<()> {
     let warnings = std::sync::Mutex::new(false);
@@ -34,9 +34,9 @@ pub fn raxtax<'a, 'b>(
     pb.enable_steady_tick(Duration::from_millis(100));
     queries
         .par_chunks(chunk_size)
-        .map(|q| {
+        .flat_map(|q| {
             let mut intersect_buffer: Vec<u16> = vec![0; tree.num_tips];
-            let results = q.iter().map(|(query_label, query_sequence)| {
+            q.iter().map(|(query_label, query_sequence)| {
                 pb.inc(1);
                 intersect_buffer.fill(0);
                 let exact_matches = tree.sequences.get(query_sequence).unwrap_or(&empty_vec);
@@ -68,12 +68,12 @@ pub fn raxtax<'a, 'b>(
                 }
                 drop(tmr);
                 let highest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len() as u16, num_trials, &intersect_buffer);
-                let eval_res = lineage::Lineage::new(query_label, tree, highest_hit_probs).evaluate();
+                let mut eval_res = lineage::Lineage::new(query_label, tree, highest_hit_probs).evaluate();
                 assert!(!eval_res.is_empty());
                 if !raw_confidence && !skip_exact_matches {
                     // Special case: if there is exactly 1 exact match, confidence is set to 1.0
                     if let [idx] = exact_matches[..] {
-                        return vec![lineage::EvaluationResult {
+                        eval_res = vec![lineage::EvaluationResult {
                             query_label,
                             lineage: &tree.lineages[idx as usize],
                             confidence_values: vec![1.0; tree.lineages[idx as usize].chars().filter(|c| *c == ',').count() + 1],
@@ -82,13 +82,11 @@ pub fn raxtax<'a, 'b>(
                         }];
                     }
                 }
-                eval_res
-            }).collect::<Vec<Vec<lineage::EvaluationResult<'a, 'b>>>>();
-            let primary_results = utils::get_results(&results);
-            let processed_queries = q.iter().map(|(query_label, _)| query_label.clone()).collect_vec();
-            let tsv_results = if tsv { Some(utils::get_results_tsv(&results, utils::decompress_sequences(q))?) } else { None };
-            sender.send((processed_queries, primary_results, tsv_results))?;
-            Ok(())
+                let primary_results = utils::get_results(&eval_res);
+                let tsv_results = if tsv { Some(utils::get_results_tsv(&eval_res, utils::decompress_sequence(query_sequence))) } else { None };
+                sender.send((query_label.clone(), primary_results, tsv_results))?;
+                Ok(())
+            }).collect_vec()
 
             }).collect::<Result<Vec<()>>>()?;
 

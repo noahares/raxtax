@@ -19,6 +19,7 @@ fn main() {
             primary: mut output,
             tsv: mut tsv_output,
             log: log_output,
+            progress: mut progress_output,
         },
         mut checkpoint,
     ) = args.get_output().unwrap_or_else(|e| {
@@ -88,6 +89,10 @@ fn main() {
                 exit(exitcode::CANTCREAT);
             }
         }
+    } else {
+        checkpoint.save().unwrap_or_else(|e| {
+            utils::report_error(e, "Failed to write checkpoint! Continuing without...")
+        });
     }
 
     if args.only_db {
@@ -115,18 +120,14 @@ fn main() {
         ((queries.len() / (n_threads * 10)) + 1).max(100)
     };
 
-    let (sender, receiver) =
-        crossbeam::channel::unbounded::<(Vec<String>, String, Option<String>)>();
+    let (sender, receiver) = crossbeam::channel::unbounded::<(String, String, Option<String>)>();
     let writer_handle = std::thread::spawn(move || -> Result<()> {
-        for (processed_queries, results, tsv_results) in receiver {
+        for (query, results, tsv_results) in receiver {
             if let Some(ref mut tsv_output) = tsv_output {
                 writeln!(tsv_output, "{}", tsv_results.unwrap())?;
-                tsv_output.flush()?;
             }
             writeln!(output, "{}", results)?;
-            output.flush()?;
-            checkpoint.processed_queries.extend(processed_queries);
-            checkpoint.save()?;
+            writeln!(progress_output, "{}", query)?;
         }
         Ok(())
     });
