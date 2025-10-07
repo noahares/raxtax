@@ -89,6 +89,26 @@ impl Checkpoint {
     }
 }
 
+pub fn write_build_info(out: &mut dyn Write) -> Result<()> {
+    let name = env!("CARGO_PKG_NAME");
+    let version = env!("CARGO_PKG_VERSION");
+    let commit = option_env!("GIT_HASH").unwrap_or("unknown");
+    let profile = option_env!("BUILD_PROFILE").unwrap_or("unknown");
+    let rustflags = option_env!("RUSTFLAGS").unwrap_or("");
+    let timestamp = option_env!("BUILD_DATE").unwrap_or("unknown date");
+    let cmdline = std::env::args().collect::<Vec<_>>().join(" ");
+
+    writeln!(
+        out,
+        "{name} {version} (commit {commit}, built with {profile}, {timestamp})\n\
+         Build flags: {rustflags}\n\
+         Command: {cmdline}\n\
+         ------------------------------------------------------------"
+    )?;
+    out.flush()?;
+    Ok(())
+}
+
 #[derive(Parser)]
 #[command(author, version, about)]
 pub struct Args {

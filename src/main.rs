@@ -18,7 +18,7 @@ fn main() {
         io::OutputWriters {
             primary: mut output,
             tsv: mut tsv_output,
-            log: log_output,
+            log: mut log_output,
             progress: mut progress_output,
         },
         mut checkpoint,
@@ -28,6 +28,9 @@ fn main() {
         }
         exit(exitcode::CANTCREAT);
     });
+    if let Err(e) = io::write_build_info(&mut log_output) {
+            eprintln!("\x1b[31m[ERROR]\x1b[0m {e}");
+    }
     env_logger::Builder::new()
         .target(env_logger::Target::Pipe(log_output))
         .filter_level(args.verbosity.log_level_filter())

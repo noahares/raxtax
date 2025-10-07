@@ -1,6 +1,6 @@
 [package]
 name = "raxtax"
-version = "1.4.0"
+version = "1.4.1"
 authors = ["Noah Wahl <noah.ares99@gmail.com>"]
 edition = "2021"
 repository = "https://github.com/noahares/raxtax"
@@ -13,6 +13,7 @@ include = [
     "./README.md",
     "./LICENSE"
 ]
+build = "build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -36,6 +37,9 @@ regex = "1.10.4"
 serde = { version = "1.0.203", features = ["derive"] }
 serde_json = "1.0"
 statrs = "0.16.0"
+
+[build-dependencies]
+chrono = "0.4.42"
 
 [profile.ultra]
 inherits = "release"
