@@ -17,8 +17,9 @@ pub fn raxtax<'a, 'b>(
     skip_exact_matches: bool,
     raw_confidence: bool,
     chunk_size: usize,
-    sender: &crossbeam::channel::Sender<(String, String, Option<String>)>,
+    sender: &crossbeam::channel::Sender<(String, String, Option<String>, Option<String>)>,
     tsv: bool,
+    binning: bool,
 ) -> Result<()> {
     let warnings = std::sync::Mutex::new(false);
     let empty_vec = Vec::new();
@@ -68,7 +69,7 @@ pub fn raxtax<'a, 'b>(
                 }
                 drop(tmr);
                 let highest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len() as u16, num_trials, &intersect_buffer);
-                let mut eval_res = lineage::Lineage::new(query_label, tree, highest_hit_probs).evaluate();
+                let (mut eval_res, bin_res) = lineage::Lineage::new(query_label, tree, highest_hit_probs).evaluate();
                 assert!(!eval_res.is_empty());
                 if !raw_confidence && !skip_exact_matches {
                     // Special case: if there is exactly 1 exact match, confidence is set to 1.0
@@ -84,7 +85,8 @@ pub fn raxtax<'a, 'b>(
                 }
                 let primary_results = utils::get_results(&eval_res);
                 let tsv_results = if tsv { Some(utils::get_results_tsv(&eval_res, utils::decompress_sequence(query_sequence))) } else { None };
-                sender.send((query_label.clone(), primary_results, tsv_results))?;
+                let binning_result = if binning { Some(utils::get_results_binning(bin_res)) } else { None };
+                sender.send((query_label.clone(), primary_results, tsv_results, binning_result))?;
                 Ok(())
             }).collect_vec()
 

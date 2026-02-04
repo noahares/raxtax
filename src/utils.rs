@@ -88,6 +88,13 @@ pub fn get_results_tsv(results: &[lineage::EvaluationResult<'_, '_>], sequence: 
         .join("\n")
 }
 
+pub fn get_results_binning(result: Option<(String, f64)>) -> String {
+    match result {
+        Some((bin, conf)) => format!("{}\t{:.5}", bin, conf),
+        None => String::from("NO_BIN\t0.0"),
+    }
+}
+
 pub fn euclidean_distance_l1(a: &[f64], b: &[f64]) -> f64 {
     assert!(a.len() == b.len());
     if a.is_empty() {
@@ -203,7 +210,7 @@ mod tests {
 
     use crate::utils::{cosine_similarity, euclidean_distance_l1, euclidean_norm};
 
-    use super::{decompress_sequences, map_four_to_two_bit_repr, sequence_to_kmers};
+    use super::{decompress_sequence, map_four_to_two_bit_repr, sequence_to_kmers};
 
     #[test]
     fn test_euclidean_norm() {
@@ -264,11 +271,8 @@ mod tests {
 
     #[test]
     fn test_decompress_sequence() {
-        let sequence = vec![(
-            String::from("label1"),
-            vec![1_u8, 2, 1, 4, 8, 2, 8, 4, 1, 4, 8, 2, 8, 4, 1, 4],
-        )];
-        let decompressed = decompress_sequences(&sequence);
-        assert_equal(decompressed, vec![String::from("ACAGTCTGAGTCTGAG")]);
+        let sequence = vec![1_u8, 2, 1, 4, 8, 2, 8, 4, 1, 4, 8, 2, 8, 4, 1, 4];
+        let decompressed = decompress_sequence(&sequence);
+        assert_eq!(decompressed, String::from("ACAGTCTGAGTCTGAG"));
     }
 }

@@ -17,6 +17,7 @@ use crate::utils;
 pub struct OutputWriters {
     pub primary: File,
     pub tsv: Option<File>,
+    pub binning: Option<File>,
     pub log: Box<dyn Write + Send>,
     pub progress: File,
 }
@@ -124,6 +125,9 @@ pub struct Args {
     /// Output primary result file in tsv format
     #[arg(long)]
     pub tsv: bool,
+    /// Output best taxonomic bin for each query
+    #[arg(long)]
+    pub binning: bool,
     /// Create binary database and exit
     #[arg(long, conflicts_with = "skip_db")]
     pub only_db: bool,
@@ -204,6 +208,7 @@ impl Args {
         let ckp_path = prefix.join("raxtax.json");
         let out_path = prefix.join("raxtax.out");
         let tsv_path = prefix.join("raxtax.tsv");
+        let binning_path = prefix.join("raxtax.binning.tsv");
         let checkpoint = if !self.redo && ckp_path.is_file() {
             let ckp_file = std::fs::File::open(&ckp_path)?;
             match serde_json::from_reader(ckp_file) {
@@ -237,6 +242,11 @@ impl Args {
         } else {
             None
         };
+        let binning_output = if self.binning {
+            Some(create_file(binning_path, !self.redo)?)
+        } else {
+            None
+        };
         let log_path = prefix.join("raxtax.log");
         let mut log_output =
             create_file(log_path, !self.redo).map(|f| Box::new(f) as Box<dyn Write + Send>)?;
@@ -255,6 +265,7 @@ impl Args {
             OutputWriters {
                 primary: create_file(out_path, !self.redo)?,
                 tsv: tsv_output,
+                binning: binning_output,
                 log: log_output,
                 progress: create_file(prefix.join("raxtax.ckp"), !self.redo)?,
             },

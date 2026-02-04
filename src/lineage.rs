@@ -77,7 +77,7 @@ impl<'a, 'b> Lineage<'a, 'b> {
     }
 
     #[time("debug")]
-    pub fn evaluate(mut self) -> Vec<EvaluationResult<'a, 'b>> {
+    pub fn evaluate(mut self) -> (Vec<EvaluationResult<'a, 'b>>, Option<(String, f64)>) {
         self.eval_recurse(&self.tree.root, &[], &[]);
         // NOTE: This would be the correct maximum leaf confidence and ideally we would normalize with this.
         // However, because this is already 0.99 for 100 tips, it is not worth it, as it is
@@ -88,7 +88,9 @@ impl<'a, 'b> Lineage<'a, 'b> {
                 .iter()
                 .map(|&v| (v - 1.0 / self.tree.num_tips as f64)),
         );
-        self.confidence_vectors
+        let mut best_bin_idx = None;
+        let results = self
+            .confidence_vectors
             .into_iter()
             .sorted_by(|a, b| b.1.iter().partial_cmp(a.1.iter()).unwrap())
             .map(|(idx, conf_values, expected_conf_values)| {
@@ -100,6 +102,9 @@ impl<'a, 'b> Lineage<'a, 'b> {
                     &conf_values[start_index..],
                     &expected_conf_values[start_index..],
                 );
+                if best_bin_idx.is_none() {
+                    best_bin_idx = self.tree.lineage_idx_to_bin_idx[idx];
+                }
                 EvaluationResult {
                     query_label: self.query_label,
                     lineage: &self.tree.lineages[idx],
@@ -108,7 +113,18 @@ impl<'a, 'b> Lineage<'a, 'b> {
                     global_signal: leaf_confidence,
                 }
             })
-            .collect_vec()
+            .collect_vec();
+        let bin_result = match best_bin_idx {
+            Some(bin_idx) => Some((
+                self.tree.bins[bin_idx].clone(),
+                self.tree.bin_idx_to_lineage_idxs[bin_idx]
+                    .iter()
+                    .map(|&idx| self.confidence_values[idx])
+                    .sum(),
+            )),
+            None => None,
+        };
+        (results, bin_result)
     }
 
     fn get_confidence(&self, node: &Node) -> f64 {
@@ -182,6 +198,7 @@ impl<'a, 'b> Lineage<'a, 'b> {
 #[cfg(test)]
 mod tests {
     use itertools::Itertools;
+    use statrs::assert_almost_eq;
 
     use crate::{
         lineage::{EvaluationResult, Lineage},
@@ -197,6 +214,7 @@ mod tests {
             "Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis".into(),
             "Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis".into(),
         ];
+        let bins = vec![None; 5];
         let sequences = vec![
             [0b00].repeat(9),
             [0b00].repeat(9),
@@ -204,7 +222,7 @@ mod tests {
             [0b00].repeat(9),
             [0b00].repeat(9),
         ];
-        let tree = Tree::new(lineages, sequences).unwrap();
+        let tree = Tree::new(lineages.into_iter().zip(bins).collect_vec(), sequences).unwrap();
         let confidence_values = vec![0.1, 0.3, 0.4, 0.004, 0.004];
         tree.print();
         let query_label = String::from("q");
@@ -212,6 +230,7 @@ mod tests {
         let result = lineage.evaluate();
         assert_eq!(
             result
+                .0
                 .into_iter()
                 .map(
                     |EvaluationResult {
@@ -249,6 +268,7 @@ mod tests {
             "Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis".into(),
             "Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis".into(),
         ];
+        let bins = vec![None; 7];
         let sequences = vec![
             [0b00].repeat(9),
             [0b00].repeat(9),
@@ -258,7 +278,7 @@ mod tests {
             [0b00].repeat(9),
             [0b00].repeat(9),
         ];
-        let tree = Tree::new(lineages, sequences).unwrap();
+        let tree = Tree::new(lineages.into_iter().zip(bins).collect_vec(), sequences).unwrap();
         let confidence_values = vec![0.05, 0.1, 0.3, 0.4, 0.1, 0.004, 0.004];
         tree.print();
         let query_label = String::from("q");
@@ -267,6 +287,7 @@ mod tests {
         dbg!(&result);
         assert_eq!(
             result
+                .0
                 .into_iter()
                 .map(
                     |EvaluationResult {
@@ -304,9 +325,18 @@ mod tests {
     #[test]
     fn test_likelihood_edge_case() {
         let lineages = vec![
-            "Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis".into(),
-            "Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis_ferrocius".into(),
-            "Animalia,Chordata,Mammalia,Carnivora,Canidae,Canis".into(),
+            (
+                "Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis".into(),
+                None,
+            ),
+            (
+                "Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis_ferrocius".into(),
+                None,
+            ),
+            (
+                "Animalia,Chordata,Mammalia,Carnivora,Canidae,Canis".into(),
+                None,
+            ),
         ];
         let sequences = vec![[0b00].repeat(9), [0b00].repeat(9), [0b00].repeat(9)];
         let tree = Tree::new(lineages, sequences).unwrap();
@@ -317,6 +347,7 @@ mod tests {
         let result = lineage.evaluate();
         assert_eq!(
             result
+                .0
                 .into_iter()
                 .map(
                     |EvaluationResult {
@@ -331,5 +362,83 @@ mod tests {
                 vec![0.01, 0.01, 0.01, 0.01, 0.01, 0.01,],
             ),]
         );
+    }
+
+    #[test]
+    fn test_taxonomic_binning() {
+        let lineages = vec![
+            String::from("Animalia,Chordata,Mammalia,Primates,Hominidae,Homo,Homo_sapiens"),
+            "Animalia,Chordata,Mammalia,Primates,Hominidae,Pan".into(),
+            "Animalia,Chordata,Mammalia,Carnivora,Canidae,Canis".into(),
+            "Animalia,Chordata,Mammalia,Carnivora,Doggo".into(),
+            "Animalia,Chordata,Mammalia,Mouse".into(),
+            "Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis".into(),
+            "Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis".into(),
+        ];
+        let bins = vec![
+            Some(String::from("BIN1")),
+            Some("BIN1".into()),
+            Some("BIN2".into()),
+            Some("BIN2".into()),
+            Some("BIN3".into()),
+            None,
+            None,
+        ];
+        let sequences = vec![
+            [0b00].repeat(9),
+            [0b00].repeat(9),
+            [0b00].repeat(9),
+            [0b00].repeat(9),
+            [0b00].repeat(9),
+            [0b00].repeat(9),
+            [0b00].repeat(9),
+        ];
+        let tree = Tree::new(lineages.into_iter().zip(bins).collect_vec(), sequences).unwrap();
+        let confidence_values = vec![0.05, 0.1, 0.3, 0.4, 0.1, 0.004, 0.004];
+        tree.print();
+        let query_label = String::from("q");
+        let lineage = Lineage::new(&query_label, &tree, confidence_values);
+        let result = lineage.evaluate().1.unwrap();
+        assert_eq!(result.0, String::from("BIN2"));
+        assert_almost_eq!(result.1, 0.15, 1e-7);
+    }
+
+    #[test]
+    fn test_taxonomic_binning_weird_bins() {
+        let lineages = vec![
+            String::from("Animalia,Chordata,Mammalia,Primates,Hominidae,Homo,Homo_sapiens"),
+            "Animalia,Chordata,Mammalia,Primates,Hominidae,Pan".into(),
+            "Animalia,Chordata,Mammalia,Carnivora,Canidae,Canis".into(),
+            "Animalia,Chordata,Mammalia,Carnivora,Doggo".into(),
+            "Animalia,Chordata,Mammalia,Mouse".into(),
+            "Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis".into(),
+            "Animalia,Chordata,Mammalia,Carnivora,Felidae,Felis".into(),
+        ];
+        let bins = vec![
+            Some(String::from("BIN1")),
+            Some("BIN2".into()),
+            None,
+            Some("BIN3".into()),
+            Some("BIN3".into()),
+            Some("BIN4".into()),
+            Some("BIN3".into()),
+        ];
+        let sequences = vec![
+            [0b00].repeat(9),
+            [0b00].repeat(9),
+            [0b00].repeat(9),
+            [0b00].repeat(9),
+            [0b00].repeat(9),
+            [0b00].repeat(9),
+            [0b00].repeat(9),
+        ];
+        let tree = Tree::new(lineages.into_iter().zip(bins).collect_vec(), sequences).unwrap();
+        let confidence_values = vec![0.05, 0.1, 0.3, 0.4, 0.1, 0.004, 0.004];
+        tree.print();
+        let query_label = String::from("q");
+        let lineage = Lineage::new(&query_label, &tree, confidence_values);
+        let result = lineage.evaluate().1.unwrap();
+        assert_eq!(result.0, String::from("BIN3"));
+        assert_almost_eq!(result.1, 0.5, 1e-7);
     }
 }

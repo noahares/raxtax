@@ -18,6 +18,7 @@ fn main() {
         io::OutputWriters {
             primary: mut output,
             tsv: mut tsv_output,
+            binning: mut binning_output,
             log: mut log_output,
             progress: mut progress_output,
         },
@@ -29,7 +30,7 @@ fn main() {
         exit(exitcode::CANTCREAT);
     });
     if let Err(e) = io::write_build_info(&mut log_output) {
-            eprintln!("\x1b[31m[ERROR]\x1b[0m {e}");
+        eprintln!("\x1b[31m[ERROR]\x1b[0m {e}");
     }
     env_logger::Builder::new()
         .target(env_logger::Target::Pipe(log_output))
@@ -123,11 +124,15 @@ fn main() {
         ((queries.len() / (n_threads * 10)) + 1).max(100)
     };
 
-    let (sender, receiver) = crossbeam::channel::unbounded::<(String, String, Option<String>)>();
+    let (sender, receiver) =
+        crossbeam::channel::unbounded::<(String, String, Option<String>, Option<String>)>();
     let writer_handle = std::thread::spawn(move || -> Result<()> {
-        for (query, results, tsv_results) in receiver {
+        for (query, results, tsv_results, binning_result) in receiver {
             if let Some(ref mut tsv_output) = tsv_output {
                 writeln!(tsv_output, "{}", tsv_results.unwrap())?;
+            }
+            if let Some(ref mut binning_output) = binning_output {
+                writeln!(binning_output, "{}\t{}", query, binning_result.unwrap())?;
             }
             writeln!(output, "{}", results)?;
             writeln!(progress_output, "{}", query)?;
@@ -142,6 +147,7 @@ fn main() {
         chunk_size,
         &sender,
         args.tsv,
+        args.binning,
     );
     drop(sender);
     if writer_handle.join().is_err() {

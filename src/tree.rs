@@ -37,20 +37,23 @@ fn check_lineage_size() {}
 pub struct Tree {
     pub root: Node,
     pub lineages: Vec<String>,
+    pub bins: Vec<String>,
     pub sequences: HashMap<Vec<u8>, Vec<IndexType>>,
     pub k_mer_map: Vec<Vec<IndexType>>,
+    pub bin_idx_to_lineage_idxs: Vec<Vec<usize>>,
+    pub lineage_idx_to_bin_idx: Vec<Option<usize>>,
     pub num_tips: usize,
 }
 
 impl Tree {
     #[time("debug", "Tree::{}")]
-    pub fn new(lineages: Vec<String>, sequences: Vec<Vec<u8>>) -> Result<Self> {
-        check_lineage_size(lineages.len());
+    pub fn new(labels: Vec<(String, Option<String>)>, sequences: Vec<Vec<u8>>) -> Result<Self> {
+        check_lineage_size(labels.len());
         let mut root = Node::new(String::from("root"), 0, NodeType::Inner);
         let mut sequence_map: HashMap<Vec<u8>, Vec<IndexType>> =
             sequences.iter().map(|s| (s.clone(), Vec::new())).collect();
         let mut k_mer_map: Vec<Vec<IndexType>> = vec![Vec::new(); 2 << 15];
-        let mut lineage_sequence_pairs = lineages.into_iter().zip_eq(sequences).collect_vec();
+        let mut lineage_sequence_pairs = labels.into_iter().zip_eq(sequences).collect_vec();
         lineage_sequence_pairs.sort_by(|(l1, _), (l2, _)| l1.cmp(l2));
         let mut confidence_idx = 0_usize;
         let _ = lineage_sequence_pairs
@@ -64,7 +67,7 @@ impl Tree {
                 .progress_chars("##-"),
             )
             .with_message("Creating lineage tree and k-mer map...")
-            .map(|(idx, (lineage, sequence))| -> Result<()> {
+            .map(|(idx, ((lineage, _), sequence))| -> Result<()> {
                 let levels = lineage.split(',').collect_vec();
                 let last_level_idx = levels.len() - 1;
                 let mut current_node = &mut root;
@@ -125,16 +128,46 @@ impl Tree {
             })
             .collect::<Result<Vec<()>>>()?;
         root.confidence_range.1 = confidence_idx;
-        let (sorted_lineages, _): (Vec<String>, Vec<Vec<u8>>) =
+        let (sorted_lineages, _): (Vec<(String, Option<String>)>, Vec<Vec<u8>>) =
             lineage_sequence_pairs.into_iter().unzip();
+
+        let mut bin_idx_to_lineage_idxs: Vec<Vec<usize>> = Vec::new();
+        let bin_id_idx_pairs = sorted_lineages
+            .iter()
+            .enumerate()
+            .flat_map(|(idx, (_, bin_id))| bin_id.clone().map(|b| (b, idx)))
+            .sorted()
+            .collect_vec();
+        let mut lineage_idx_to_bin_idx: Vec<Option<usize>> = vec![None; confidence_idx];
+        if let Some(pair) = bin_id_idx_pairs.first() {
+            let mut current_bin = &pair.0;
+            let mut current_idxs = Vec::new();
+            let mut bin_idx = 0_usize;
+            for (bin, idx) in bin_id_idx_pairs.iter() {
+                if *bin != *current_bin {
+                    bin_idx_to_lineage_idxs.push(current_idxs.clone());
+                    current_bin = bin;
+                    bin_idx += 1;
+                    current_idxs.clear();
+                }
+                current_idxs.push(*idx);
+                lineage_idx_to_bin_idx[*idx] = Some(bin_idx);
+            }
+            bin_idx_to_lineage_idxs.push(current_idxs);
+        };
+        let (bins, _): (Vec<String>, Vec<usize>) = bin_id_idx_pairs.into_iter().unzip();
+        let (lineages, _): (Vec<String>, Vec<Option<String>>) = sorted_lineages.into_iter().unzip();
         Ok(Self {
             root,
-            lineages: sorted_lineages,
+            lineages,
+            bins: bins.into_iter().unique().collect_vec(),
             sequences: sequence_map,
             k_mer_map: k_mer_map
                 .into_par_iter()
                 .map(|seqs| seqs.into_iter().unique().sorted().collect_vec())
                 .collect(),
+            bin_idx_to_lineage_idxs,
+            lineage_idx_to_bin_idx,
             num_tips: confidence_idx,
         })
     }
@@ -187,7 +220,7 @@ enum NodeType {
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Node {
-    label: String,
+    pub label: String,
     pub confidence_range: (usize, usize),
     pub children: Vec<Node>,
     node_type: NodeType,
