@@ -155,8 +155,7 @@ impl<'a, 'b> Lineage<'a, 'b> {
             );
             let child_pushed_result = self.eval_recurse(c, &conf_prefix, &expected_conf_prefix);
             if !child_pushed_result && self.tree.is_taxon_leaf(c) {
-                let max_idx = self.confidence_prefix_sum
-                    [c.confidence_range.0..c.confidence_range.1]
+                let max_idx = self.confidence_values[c.confidence_range.0..c.confidence_range.1]
                     .iter()
                     .position_max_by(|&&a, &b| a.partial_cmp(b).unwrap())
                     .unwrap()
