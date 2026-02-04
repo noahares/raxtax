@@ -155,11 +155,14 @@ impl<'a, 'b> Lineage<'a, 'b> {
             );
             let child_pushed_result = self.eval_recurse(c, &conf_prefix, &expected_conf_prefix);
             if !child_pushed_result && self.tree.is_taxon_leaf(c) {
-                self.confidence_vectors.push((
-                    c.confidence_range.0,
-                    conf_prefix,
-                    expected_conf_prefix,
-                ));
+                let max_idx = self.confidence_prefix_sum
+                    [c.confidence_range.0..c.confidence_range.1]
+                    .iter()
+                    .position_max_by(|&&a, &b| a.partial_cmp(b).unwrap())
+                    .unwrap()
+                    + c.confidence_range.0;
+                self.confidence_vectors
+                    .push((max_idx, conf_prefix, expected_conf_prefix));
                 pushed_result = true;
             }
             pushed_result |= child_pushed_result;
@@ -438,7 +441,7 @@ mod tests {
         let query_label = String::from("q");
         let lineage = Lineage::new(&query_label, &tree, confidence_values);
         let result = lineage.evaluate().1.unwrap();
-        assert_eq!(result.0, String::from("BIN3"));
-        assert_almost_eq!(result.1, 0.5, 1e-7);
+        assert_eq!(result.0, String::from("BIN4"));
+        assert_almost_eq!(result.1, 0.4, 1e-7);
     }
 }
