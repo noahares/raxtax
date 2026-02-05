@@ -55,10 +55,16 @@ pub struct Lineage<'a, 'b> {
     confidence_prefix_sum: Vec<f64>,
     confidence_vectors: Vec<(usize, Vec<f64>, Vec<f64>)>,
     rounding_factor: f64,
+    binning: bool,
 }
 
 impl<'a, 'b> Lineage<'a, 'b> {
-    pub fn new(query_label: &'b String, tree: &'a Tree, confidence_values: Vec<f64>) -> Self {
+    pub fn new(
+        query_label: &'b String,
+        tree: &'a Tree,
+        confidence_values: Vec<f64>,
+        binning: bool,
+    ) -> Self {
         let mut confidence_prefix_sum = vec![0.0];
         confidence_prefix_sum.extend(confidence_values.iter().scan(0.0, |sum, i| {
             *sum += i;
@@ -73,6 +79,7 @@ impl<'a, 'b> Lineage<'a, 'b> {
             confidence_prefix_sum,
             confidence_vectors: Vec::with_capacity(expected_num_results),
             rounding_factor,
+            binning,
         }
     }
 
@@ -102,7 +109,7 @@ impl<'a, 'b> Lineage<'a, 'b> {
                     &conf_values[start_index..],
                     &expected_conf_values[start_index..],
                 );
-                if best_bin_idx.is_none() {
+                if self.binning && best_bin_idx.is_none() {
                     best_bin_idx = self.tree.lineage_idx_to_bin_idx[idx];
                 }
                 EvaluationResult {
@@ -124,6 +131,9 @@ impl<'a, 'b> Lineage<'a, 'b> {
             )),
             None => None,
         };
+        if !self.binning {
+            assert!(bin_result.is_none())
+        }
         (results, bin_result)
     }
 
@@ -155,11 +165,15 @@ impl<'a, 'b> Lineage<'a, 'b> {
             );
             let child_pushed_result = self.eval_recurse(c, &conf_prefix, &expected_conf_prefix);
             if !child_pushed_result && self.tree.is_taxon_leaf(c) {
-                let max_idx = self.confidence_values[c.confidence_range.0..c.confidence_range.1]
-                    .iter()
-                    .position_max_by(|&&a, &b| a.partial_cmp(b).unwrap())
-                    .unwrap()
-                    + c.confidence_range.0;
+                let max_idx = if self.binning {
+                    self.confidence_values[c.confidence_range.0..c.confidence_range.1]
+                        .iter()
+                        .position_max_by(|&&a, &b| a.partial_cmp(b).unwrap())
+                        .unwrap()
+                        + c.confidence_range.0
+                } else {
+                    c.confidence_range.0
+                };
                 self.confidence_vectors
                     .push((max_idx, conf_prefix, expected_conf_prefix));
                 pushed_result = true;
@@ -228,7 +242,7 @@ mod tests {
         let confidence_values = vec![0.1, 0.3, 0.4, 0.004, 0.004];
         tree.print();
         let query_label = String::from("q");
-        let lineage = Lineage::new(&query_label, &tree, confidence_values);
+        let lineage = Lineage::new(&query_label, &tree, confidence_values, false);
         let result = lineage.evaluate();
         assert_eq!(
             result
@@ -284,7 +298,7 @@ mod tests {
         let confidence_values = vec![0.05, 0.1, 0.3, 0.4, 0.1, 0.004, 0.004];
         tree.print();
         let query_label = String::from("q");
-        let lineage = Lineage::new(&query_label, &tree, confidence_values);
+        let lineage = Lineage::new(&query_label, &tree, confidence_values, false);
         let result = lineage.evaluate();
         dbg!(&result);
         assert_eq!(
@@ -345,7 +359,7 @@ mod tests {
         let confidence_values = vec![0.004, 0.004, 0.004];
         tree.print();
         let query_label = String::from("q");
-        let lineage = Lineage::new(&query_label, &tree, confidence_values);
+        let lineage = Lineage::new(&query_label, &tree, confidence_values, false);
         let result = lineage.evaluate();
         assert_eq!(
             result
@@ -399,7 +413,7 @@ mod tests {
         let confidence_values = vec![0.05, 0.1, 0.3, 0.4, 0.1, 0.004, 0.004];
         tree.print();
         let query_label = String::from("q");
-        let lineage = Lineage::new(&query_label, &tree, confidence_values);
+        let lineage = Lineage::new(&query_label, &tree, confidence_values, true);
         let result = lineage.evaluate().1.unwrap();
         assert_eq!(result.0, String::from("BIN2"));
         assert_almost_eq!(result.1, 0.15, 1e-7);
@@ -438,7 +452,7 @@ mod tests {
         let confidence_values = vec![0.05, 0.1, 0.3, 0.4, 0.1, 0.004, 0.004];
         tree.print();
         let query_label = String::from("q");
-        let lineage = Lineage::new(&query_label, &tree, confidence_values);
+        let lineage = Lineage::new(&query_label, &tree, confidence_values, true);
         let result = lineage.evaluate().1.unwrap();
         assert_eq!(result.0, String::from("BIN4"));
         assert_almost_eq!(result.1, 0.4, 1e-7);
