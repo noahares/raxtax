@@ -1,5 +1,5 @@
-use std::process::Command;
 use chrono::prelude::*;
+use std::process::Command;
 
 fn main() {
     // Get git commit hash
@@ -25,5 +25,8 @@ fn main() {
     } else {
         println!("cargo:rustc-env=RUSTFLAGS=");
     }
-    println!("cargo:rustc-env=BUILD_DATE={}", Utc::now().to_rfc3339_opts(SecondsFormat::Secs, false));
+    println!(
+        "cargo:rustc-env=BUILD_DATE={}",
+        Utc::now().to_rfc3339_opts(SecondsFormat::Secs, false)
+    );
 }

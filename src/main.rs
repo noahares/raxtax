@@ -4,10 +4,10 @@ use anyhow::{anyhow, Result};
 use clap::Parser;
 use log::Level;
 use logging_timer::timer;
-use raxtax::io;
 use raxtax::io::FileFingerprint;
+use raxtax::io::{self, ResultsToPrint};
 use raxtax::parser;
-use raxtax::raxtax::raxtax;
+use raxtax::raxtax::{raxtax, RaxtaxSettings};
 use raxtax::utils;
 use std::io::Write;
 
@@ -102,6 +102,7 @@ fn main() {
     if args.only_db {
         exit(exitcode::OK);
     }
+    let settings = RaxtaxSettings::from_args(&args);
 
     // Parse queries
     let queries = parser::parse_query_fasta_file(
@@ -124,31 +125,27 @@ fn main() {
         ((queries.len() / (n_threads * 10)) + 1).max(100)
     };
 
-    let (sender, receiver) =
-        crossbeam::channel::unbounded::<(String, String, Option<String>, Option<String>)>();
+    let (sender, receiver) = crossbeam::channel::unbounded::<ResultsToPrint>();
     let writer_handle = std::thread::spawn(move || -> Result<()> {
-        for (query, results, tsv_results, binning_result) in receiver {
+        for ResultsToPrint {
+            query,
+            primary,
+            tsv,
+            binning,
+        } in receiver
+        {
             if let Some(ref mut tsv_output) = tsv_output {
-                writeln!(tsv_output, "{}", tsv_results.unwrap())?;
+                writeln!(tsv_output, "{}", tsv.unwrap())?;
             }
             if let Some(ref mut binning_output) = binning_output {
-                writeln!(binning_output, "{}\t{}", query, binning_result.unwrap())?;
+                writeln!(binning_output, "{}\t{}", query, binning.unwrap())?;
             }
-            writeln!(output, "{}", results)?;
+            writeln!(output, "{}", primary)?;
             writeln!(progress_output, "{}", query)?;
         }
         Ok(())
     });
-    let ok = raxtax(
-        &queries,
-        &tree,
-        args.skip_exact_matches,
-        args.raw_confidence,
-        chunk_size,
-        &sender,
-        args.tsv,
-        args.binning,
-    );
+    let ok = raxtax(&queries, &tree, chunk_size, &sender, settings);
     drop(sender);
     if writer_handle.join().is_err() {
         utils::report_error(

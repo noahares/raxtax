@@ -13,7 +13,7 @@ use logging_timer::time;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::utils::map_four_to_two_bit_repr;
+use crate::{parser::LineageBinPair, utils::map_four_to_two_bit_repr};
 
 #[cfg(feature = "huge_db")]
 type IndexType = usize;
@@ -128,7 +128,7 @@ impl Tree {
             })
             .collect::<Result<Vec<()>>>()?;
         root.confidence_range.1 = confidence_idx;
-        let (sorted_lineages, _): (Vec<(String, Option<String>)>, Vec<Vec<u8>>) =
+        let (sorted_lineages, _): (Vec<LineageBinPair>, Vec<Vec<u8>>) =
             lineage_sequence_pairs.into_iter().unzip();
 
         let mut bin_idx_to_lineage_idxs: Vec<Vec<usize>> = Vec::new();

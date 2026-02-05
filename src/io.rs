@@ -22,6 +22,30 @@ pub struct OutputWriters {
     pub progress: File,
 }
 
+#[derive(Debug, Clone)]
+pub struct ResultsToPrint {
+    pub query: String,
+    pub primary: String,
+    pub tsv: Option<String>,
+    pub binning: Option<String>,
+}
+
+impl ResultsToPrint {
+    pub fn new(
+        query: String,
+        primary: String,
+        tsv: Option<String>,
+        binning: Option<String>,
+    ) -> Self {
+        Self {
+            query,
+            primary,
+            tsv,
+            binning,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Eq)]
 pub struct FileFingerprint {
     pub path: PathBuf,

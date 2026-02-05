@@ -1,6 +1,7 @@
 use anyhow::Result;
 use std::time::Duration;
 
+use crate::io::{Args, ResultsToPrint};
 use crate::lineage;
 use crate::tree::Tree;
 use crate::{prob, utils};
@@ -10,16 +11,40 @@ use log::{info, log_enabled, warn, Level};
 use logging_timer::{time, timer};
 use rayon::prelude::*;
 
+#[derive(Debug)]
+pub struct RaxtaxSettings {
+    skip_exact_matches: bool,
+    raw_confidence: bool,
+    tsv: bool,
+    binning: bool,
+}
+
+impl RaxtaxSettings {
+    pub fn new(skip_exact_matches: bool, raw_confidence: bool, tsv: bool, binning: bool) -> Self {
+        Self {
+            skip_exact_matches,
+            raw_confidence,
+            tsv,
+            binning,
+        }
+    }
+    pub fn from_args(args: &Args) -> RaxtaxSettings {
+        RaxtaxSettings {
+            skip_exact_matches: args.skip_exact_matches,
+            raw_confidence: args.raw_confidence,
+            tsv: args.tsv,
+            binning: args.binning,
+        }
+    }
+}
+
 #[time("info")]
 pub fn raxtax<'a, 'b>(
     queries: &'b [(String, Vec<u8>)],
     tree: &'a Tree,
-    skip_exact_matches: bool,
-    raw_confidence: bool,
     chunk_size: usize,
-    sender: &crossbeam::channel::Sender<(String, String, Option<String>, Option<String>)>,
-    tsv: bool,
-    binning: bool,
+    sender: &crossbeam::channel::Sender<ResultsToPrint>,
+    settings: RaxtaxSettings,
 ) -> Result<()> {
     let warnings = std::sync::Mutex::new(false);
     let empty_vec = Vec::new();
@@ -41,7 +66,7 @@ pub fn raxtax<'a, 'b>(
                 pb.inc(1);
                 intersect_buffer.fill(0);
                 let exact_matches = tree.sequences.get(query_sequence).unwrap_or(&empty_vec);
-                if !skip_exact_matches {
+                if !settings.skip_exact_matches {
                     // check for inconsistencies for exact matches
                     let mut mtx = warnings.lock().unwrap();
                     for id in exact_matches {
@@ -63,7 +88,7 @@ pub fn raxtax<'a, 'b>(
                                 unsafe { *intersect_buffer.get_unchecked_mut(*sequence_id as usize) += 1 };
                             });
                     }
-                if skip_exact_matches {
+                if settings.skip_exact_matches {
                     // look for the next best match
                     for &id in exact_matches { unsafe { *intersect_buffer.get_unchecked_mut(id as usize) = 0 } }
                 }
@@ -71,7 +96,7 @@ pub fn raxtax<'a, 'b>(
                 let highest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len() as u16, num_trials, &intersect_buffer);
                 let (mut eval_res, bin_res) = lineage::Lineage::new(query_label, tree, highest_hit_probs).evaluate();
                 assert!(!eval_res.is_empty());
-                if !raw_confidence && !skip_exact_matches {
+                if !settings.raw_confidence && !settings.skip_exact_matches {
                     // Special case: if there is exactly 1 exact match, confidence is set to 1.0
                     if let [idx] = exact_matches[..] {
                         eval_res = vec![lineage::EvaluationResult {
@@ -84,9 +109,9 @@ pub fn raxtax<'a, 'b>(
                     }
                 }
                 let primary_results = utils::get_results(&eval_res);
-                let tsv_results = if tsv { Some(utils::get_results_tsv(&eval_res, utils::decompress_sequence(query_sequence))) } else { None };
-                let binning_result = if binning { Some(utils::get_results_binning(bin_res)) } else { None };
-                sender.send((query_label.clone(), primary_results, tsv_results, binning_result))?;
+                let tsv_results = if settings.tsv { Some(utils::get_results_tsv(&eval_res, utils::decompress_sequence(query_sequence))) } else { None };
+                let binning_result = if settings.binning { Some(utils::get_results_binning(bin_res)) } else { None };
+                sender.send(ResultsToPrint::new(query_label.clone(), primary_results, tsv_results, binning_result))?;
                 Ok(())
             }).collect_vec()
 
