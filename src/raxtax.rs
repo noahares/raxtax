@@ -1,4 +1,6 @@
 use anyhow::Result;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use crate::io::{Args, ResultsToPrint};
@@ -46,7 +48,7 @@ pub fn raxtax<'a, 'b>(
     sender: &crossbeam::channel::Sender<ResultsToPrint>,
     settings: RaxtaxSettings,
 ) -> Result<()> {
-    let warnings = std::sync::Mutex::new(false);
+    let warnings = AtomicBool::new(false);
     let empty_vec = Vec::new();
     let pb = ProgressBar::new(queries.len() as u64)
         .with_style(
@@ -68,13 +70,12 @@ pub fn raxtax<'a, 'b>(
                 let exact_matches = tree.sequences.get(query_sequence).unwrap_or(&empty_vec);
                 if !settings.skip_exact_matches {
                     // check for inconsistencies for exact matches
-                    let mut mtx = warnings.lock().unwrap();
                     for id in exact_matches {
                         info!("Exact sequence match for query {query_label}: {}", tree.lineages[*id as usize]);
                     }
                     if !exact_matches.iter().map(|&idx| tree.lineages[idx as usize].rsplit_once(',').unwrap().0).all_equal() {
                         warn!("Exact matches for {query_label} differ above the leafs of the lineage tree!");
-                        *mtx = true;
+                        warnings.store(true, Ordering::Relaxed);
                     }
                 }
                 let tmr = timer!(Level::Debug; "K-mer Intersections");
@@ -117,7 +118,7 @@ pub fn raxtax<'a, 'b>(
 
             }).collect::<Result<Vec<()>>>()?;
 
-    if *warnings.lock().unwrap() && log_enabled!(Level::Warn) {
+    if warnings.load(Ordering::Relaxed) && log_enabled!(Level::Warn) {
         eprintln!("\x1b[33m[WARN ]\x1b[0m Exact matches for some queries differ above the species level! Check the log file for more information!");
     }
     Ok(())
