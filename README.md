@@ -1,7 +1,7 @@
 # RAxTax - `raxtax` Accelerates Taxonomic Classification
 
 `raxtax` is a fast and efficient k-mer-based non-Bayesian taxonomic classifier for barcoding DNA sequences.
-A preprint of our manuscript is available at [BioRxiv](https://www.biorxiv.org/content/10.1101/2025.03.11.642618v1).
+The manuscript is available at [Bioinformatics](https://doi.org/10.1093/bioinformatics/btaf620).
 This project is heavily inspired by the SINTAX algorithm [[1]](#1).
 
 ## Installation
@@ -186,5 +186,9 @@ The list of already processed queries is kept in `<prefix>/raxtax.ckp` and can b
 Edgar, Robert C. "SINTAX: a simple non-Bayesian taxonomy classifier for 16S and ITS sequences." biorxiv (2016): 074161.
 
 ## Copyright
- This work is licensed under CC BY-NC-SA 4.0.
- To view a copy of this license, visit https://creativecommons.org/licenses/by-nc-sa/4.0/
+Up until **v1.4.1** this work was licensed under CC BY-NC-SA 4.0.
+
+Since **v1.5.0** `raxtax` is licensed under GNU Affero General Public License v3.0 (GNU AGPLv3).
+To view a copy of this license, visit https://www.gnu.org/licenses/.
+
+ If you would like to use `raxtax` but can't comply with the license terms (e.g. closed source commercial use) contact Alexandros Stamatakis via stamatak@ics.forth.gr for a commercial license.
