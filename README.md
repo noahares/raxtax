@@ -10,6 +10,13 @@ This project is heavily inspired by the SINTAX algorithm [[1]](#1).
 
 Precompiled binaries are available from the [Github Release page](https://github.com/noahares/raxtax/releases/) for Linux, Windows and macOS (Intel and Apple Silicon).
 
+### Bioconda (only 64-bit Linux and 64-bit macOS)
+
+`raxtax` can be installed via:
+```sh
+conda install bioconda::raxtax
+```
+
 ### [crates.io](https://crates.io/crates/raxtax)
 
 `raxtax` can be installed via:
@@ -24,6 +31,10 @@ To install from source (with maximum performance):
 git clone https://github.com/noahares/raxtax.git
 cargo build --profile=ultra
 ```
+
+### Galaxy
+
+`raxtax` is available through the Galaxy toolshed. If you want to use it there, ask your Galaxy administrator to install it.
 
 ## Usage
 
