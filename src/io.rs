@@ -146,6 +146,9 @@ pub struct Args {
     /// If used for mislabling analysis, you want to skip exact sequence matches
     #[arg(long)]
     pub skip_exact_matches: bool,
+    /// If used for mislabling analysis, you want to skip exact lineage matches
+    #[arg(long)]
+    pub skip_exact_lineage: bool,
     /// Output primary result file in tsv format
     #[arg(long)]
     pub tsv: bool,

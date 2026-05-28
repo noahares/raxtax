@@ -35,6 +35,19 @@ fn map_dna_char(ch: char) -> u8 {
     }
 }
 
+pub fn parse_lineage(label: &String) -> Result<String> {
+    let regex = Regex::new(r"tax=([^;]+);")?;
+    let caps = regex.captures(label).context(format!(
+        "Unexpected taxonomical annotation detected in label {label}"
+    ))?;
+    let lineage = caps
+        .get(1)
+        .context(format!("No taxonomic string found in label {label}"))?
+        .as_str()
+        .to_owned();
+    Ok(lineage)
+}
+
 #[time("info", "Parsing References")]
 pub fn parse_reference_fasta_file(sequence_path: &PathBuf) -> Result<(bool, Tree)> {
     if let Ok(tree) = Tree::load_from_file(sequence_path) {
@@ -63,7 +76,6 @@ fn parse_reference_fasta_str(fasta_str: &str) -> Result<Tree> {
         let mut labels: Vec<LineageBinPair> = Vec::new();
         let mut sequences: Vec<Vec<u8>> = Vec::new();
         let mut current_sequence = Vec::<u8>::new();
-        // let mut bin_id_to_lineages: HashMap<String, Vec<String>> = HashMap::new();
 
         // create label and sequence vectors
         lines

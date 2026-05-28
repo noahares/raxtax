@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use crate::io::{Args, ResultsToPrint};
 use crate::lineage;
+use crate::parser;
 use crate::tree::Tree;
 use crate::{prob, utils};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -16,15 +17,17 @@ use rayon::prelude::*;
 #[derive(Debug)]
 pub struct RaxtaxSettings {
     skip_exact_matches: bool,
+    skip_exact_lineage: bool,
     raw_confidence: bool,
     tsv: bool,
     binning: bool,
 }
 
 impl RaxtaxSettings {
-    pub fn new(skip_exact_matches: bool, raw_confidence: bool, tsv: bool, binning: bool) -> Self {
+    pub fn new(skip_exact_matches: bool, skip_exact_lineage: bool, raw_confidence: bool, tsv: bool, binning: bool) -> Self {
         Self {
             skip_exact_matches,
+            skip_exact_lineage,
             raw_confidence,
             tsv,
             binning,
@@ -33,6 +36,7 @@ impl RaxtaxSettings {
     pub fn from_args(args: &Args) -> RaxtaxSettings {
         RaxtaxSettings {
             skip_exact_matches: args.skip_exact_matches,
+            skip_exact_lineage: args.skip_exact_lineage,
             raw_confidence: args.raw_confidence,
             tsv: args.tsv,
             binning: args.binning,
@@ -95,6 +99,14 @@ pub fn raxtax<'a, 'b>(
                 if settings.skip_exact_matches {
                     // look for the next best match
                     for &id in exact_matches { unsafe { *intersect_buffer.get_unchecked_mut(id as usize) = 0 } }
+                }
+                if settings.skip_exact_lineage {
+                    if let Ok(lineage) = parser::parse_lineage(query_label) {
+                        if let Some(&(start, end)) = tree.lineage_to_idx_range.get(&lineage) {
+                            for id in start..end { unsafe { *intersect_buffer.get_unchecked_mut(id) = 0 } }
+                        }
+                    }
+
                 }
                 drop(tmr);
                 let highest_hit_probs = prob::highest_hit_prob_per_reference(k_mers.len() as u16, num_trials, &intersect_buffer);

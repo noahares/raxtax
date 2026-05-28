@@ -5,7 +5,7 @@ use std::{
     path::PathBuf,
 };
 
-use ahash::HashMap;
+use ahash::{HashMap, HashMapExt};
 use indicatif::{ProgressIterator, ProgressStyle};
 use itertools::Itertools;
 use log::{log_enabled, Level};
@@ -42,6 +42,7 @@ pub struct Tree {
     pub k_mer_map: Vec<Vec<IndexType>>,
     pub bin_idx_to_lineage_idxs: Vec<Vec<usize>>,
     pub lineage_idx_to_bin_idx: Vec<Option<usize>>,
+    pub lineage_to_idx_range: HashMap<String, (usize, usize)>,
     pub num_tips: usize,
 }
 
@@ -56,6 +57,7 @@ impl Tree {
         let mut lineage_sequence_pairs = labels.into_iter().zip_eq(sequences).collect_vec();
         lineage_sequence_pairs.sort_by(|(l1, _), (l2, _)| l1.cmp(l2));
         let mut confidence_idx = 0_usize;
+        let mut lineage_to_idx_range: HashMap<String, (usize, usize)> = HashMap::new();
         let _ = lineage_sequence_pairs
             .iter()
             .enumerate()
@@ -108,6 +110,7 @@ impl Tree {
                     NodeType::Sequence,
                 ));
                 current_node.confidence_range.1 = confidence_idx;
+                lineage_to_idx_range.insert(lineage.clone(), current_node.confidence_range);
 
                 sequence_map
                     .get_mut(sequence)
@@ -168,6 +171,7 @@ impl Tree {
                 .collect(),
             bin_idx_to_lineage_idxs,
             lineage_idx_to_bin_idx,
+            lineage_to_idx_range,
             num_tips: confidence_idx,
         })
     }
